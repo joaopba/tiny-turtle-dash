@@ -17,33 +17,38 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("SessionContextProvider: Iniciando listener de autenticação e buscando sessão inicial.");
+
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log("Auth state change event:", event);
-        console.log("Current session from auth state change:", currentSession);
+        console.log("SessionContextProvider: Auth state change event:", event);
+        console.log("SessionContextProvider: Current session from auth state change:", currentSession);
         setSession(currentSession);
-        setLoading(false);
+        setLoading(false); // Garante que o loading seja false após qualquer mudança de estado
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Initial session from getSession():", session);
+      console.log("SessionContextProvider: Initial session from getSession():", session);
       setSession(session);
-      setLoading(false);
+      setLoading(false); // Garante que o loading seja false após a verificação inicial
     }).catch(error => {
-      console.error("Error getting session:", error);
-      setLoading(false);
+      console.error("SessionContextProvider: Erro ao obter sessão inicial:", error);
+      setLoading(false); // Garante que o loading seja false mesmo em caso de erro
     });
 
     return () => {
+      console.log("SessionContextProvider: Desinscrevendo do listener de autenticação.");
       authListener.subscription.unsubscribe();
     };
   }, []);
 
   if (loading) {
+    console.log("SessionContextProvider: Renderizando LoadingSpinner.");
     return <LoadingSpinner />;
   }
 
+  console.log("SessionContextProvider: Renderizando children com sessão:", session);
   return (
     <SessionContext.Provider value={{ session, supabase }}>
       {children}

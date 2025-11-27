@@ -3,21 +3,17 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSession } from './SessionContextProvider';
-import LoadingSpinner from './LoadingSpinner'; // Import LoadingSpinner
+import LoadingSpinner from './LoadingSpinner';
 
 const ProtectedRoute = () => {
-  const { session, supabase } = useSession(); // useSession já lida com seu próprio estado de carregamento
+  const { session } = useSession(); // useSession já lida com seu próprio estado de carregamento
   const location = useLocation();
 
-  // useSession já retorna LoadingSpinner se estiver carregando.
-  // Então, se chegarmos aqui, a sessão é nula (não autenticada) ou uma sessão real.
-
-  // Adicionando um log para verificar o estado da sessão no ProtectedRoute
   console.log("ProtectedRoute: Verificando sessão. Session:", session);
 
-  if (session === undefined) { // Este caso deve ser tratado pelo LoadingSpinner do SessionContextProvider
-    console.log("ProtectedRoute: Sessão é indefinida, provavelmente ainda carregando no SessionContextProvider.");
-    return <LoadingSpinner />; // Fallback, embora SessionContextProvider deva capturar isso
+  if (session === undefined) {
+    console.log("ProtectedRoute: Sessão é indefinida, provavelmente ainda carregando no SessionContextProvider. Renderizando LoadingSpinner.");
+    return <LoadingSpinner />;
   }
 
   if (!session) {

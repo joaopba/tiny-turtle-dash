@@ -5,9 +5,9 @@ import { Loader2 } from 'lucide-react';
 
 const LoadingSpinner = () => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
-      <Loader2 className="h-12 w-12 animate-spin text-primary dark:text-primary-foreground mb-4" />
-      <span className="text-lg font-medium text-muted-foreground">Carregando...</span>
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-foreground z-50">
+      <Loader2 className="h-16 w-16 animate-spin text-blue-600 dark:text-blue-400 mb-4" />
+      <span className="text-xl font-bold text-gray-700 dark:text-gray-300">Carregando... Por favor, aguarde.</span>
     </div>
   );
 };
