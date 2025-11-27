@@ -4,13 +4,13 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { MadeWithDyad } from '@/components/made-with-dyad';
-import { useSession } from '@/components/SessionContextProvider'; // Import useSession
-import { Navigate } from 'react-router-dom'; // Import Navigate
+import { useSession } from '@/components/SessionContextProvider';
+import { Navigate } from 'react-router-dom';
 
 function Login() {
   const { session } = useSession();
 
-  // If user is already logged in, redirect to home page
+  // Se o usuário já estiver logado, redirecionar para a página inicial
   if (session) {
     return <Navigate to="/" replace />;
   }
@@ -21,7 +21,7 @@ function Login() {
         <h1 className="text-3xl font-bold text-center mb-6">Bem-vindo</h1>
         <Auth
           supabaseClient={supabase}
-          providers={[]} // Only email/password for now
+          providers={[]} // Apenas e-mail/senha por enquanto
           appearance={{
             theme: ThemeSupa,
             variables: {
@@ -33,8 +33,8 @@ function Login() {
               },
             },
           }}
-          theme="light" // Use light theme, adjust if dark mode is preferred
-          redirectTo={window.location.origin} // Redirect to the current origin after login
+          theme="light" // Usar tema claro, ajustar se o modo escuro for preferido
+          redirectTo={window.location.origin} // Redirecionar para a origem atual após o login
         />
       </div>
       <MadeWithDyad />

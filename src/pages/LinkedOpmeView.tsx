@@ -7,9 +7,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { toast } from "sonner";
-import { History, Search } from "lucide-react"; // Added Search icon
+import { History, Search } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Input } from "@/components/ui/input"; // Import Input component
+import { Input } from "@/components/ui/input";
 
 interface LocalCpsRecord {
   id: string;
@@ -49,7 +49,7 @@ const LinkedOpmeView = () => {
   const [localCpsRecords, setLocalCpsRecords] = useState<(LocalCpsRecord & { linkedOpme: LinkedOpme[] })[]>([]);
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState<string>(""); // New state for search term
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     console.log("LinkedOpmeView - Current userId:", userId);

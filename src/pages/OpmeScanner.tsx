@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Scan, Search } from "lucide-react"; // Added Search icon
+import { CalendarIcon, Scan, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -129,43 +129,7 @@ const OpmeScanner = () => {
     }
   }, [userId, selectedCps, opmeInventory]);
 
-  useEffect(() => {
-    fetchOpmeInventory();
-  }, [fetchOpmeInventory]);
-
-  useEffect(() => {
-    fetchLinkedOpme();
-  }, [fetchLinkedOpme]);
-
-  const handleSelectCps = useCallback(async (record: CpsRecord) => {
-    setSelectedCps(record);
-    if (!userId) {
-      toast.error("Você precisa estar logado para selecionar um CPS.");
-      return;
-    }
-
-    // Save or update the selected CPS record in local_cps_records table
-    const { data, error } = await supabase
-      .from('local_cps_records')
-      .upsert({
-        user_id: userId,
-        cps_id: record.CPS,
-        patient: record.PATIENT,
-        professional: record.PROFESSIONAL,
-        agreement: record.AGREEMENT,
-        business_unit: record.UNIDADENEGOCIO,
-      }, { onConflict: 'cps_id, user_id' }) // Conflict on cps_id and user_id to update existing
-      .select();
-
-    if (error) {
-      console.error("Erro ao salvar CPS localmente:", error);
-      toast.error("Falha ao salvar detalhes do CPS localmente.");
-    } else {
-      console.log("CPS salvo/atualizado localmente:", data);
-    }
-  }, [userId]);
-
-  const fetchCpsRecords = async () => {
+  const fetchCpsRecords = useCallback(async () => {
     if (!startDate || !endDate || !businessUnit) {
       toast.error("Por favor, selecione a data inicial, final e a unidade de negócio.");
       return;
@@ -209,7 +173,50 @@ const OpmeScanner = () => {
     } finally {
       setLoadingCps(false);
     }
-  };
+  }, [startDate, endDate, businessUnit, userId]); // Adicionado userId às dependências
+
+  useEffect(() => {
+    fetchOpmeInventory();
+  }, [fetchOpmeInventory]);
+
+  useEffect(() => {
+    fetchLinkedOpme();
+  }, [fetchLinkedOpme]);
+
+  // Auto-fetch CPS records on mount
+  useEffect(() => {
+    if (userId) { // Só busca se o userId estiver disponível
+      fetchCpsRecords();
+    }
+  }, [userId, fetchCpsRecords]); // Adicionado userId e fetchCpsRecords às dependências
+
+  const handleSelectCps = useCallback(async (record: CpsRecord) => {
+    setSelectedCps(record);
+    if (!userId) {
+      toast.error("Você precisa estar logado para selecionar um CPS.");
+      return;
+    }
+
+    // Save or update the selected CPS record in local_cps_records table
+    const { data, error } = await supabase
+      .from('local_cps_records')
+      .upsert({
+        user_id: userId,
+        cps_id: record.CPS,
+        patient: record.PATIENT,
+        professional: record.PROFESSIONAL,
+        agreement: record.AGREEMENT,
+        business_unit: record.UNIDADENEGOCIO,
+      }, { onConflict: 'cps_id, user_id' }) // Conflict on cps_id and user_id to update existing
+      .select();
+
+    if (error) {
+      console.error("Erro ao salvar CPS localmente:", error);
+      toast.error("Falha ao salvar detalhes do CPS localmente.");
+    } else {
+      console.log("CPS salvo/atualizado localmente:", data);
+    }
+  }, [userId]);
 
   const handleBarcodeScan = async () => {
     if (!selectedCps) {
