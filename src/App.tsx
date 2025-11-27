@@ -3,15 +3,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard"; // Importar o novo Dashboard
+import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import OpmeScanner from "./pages/OpmeScanner";
 import OpmeRegistration from "./pages/OpmeRegistration";
 import LinkedOpmeView from "./pages/LinkedOpmeView";
-import Login from "./pages/Login";
-import { SessionContextProvider } from "./components/SessionContextProvider";
+import Login from "./pages/Login"; // Mantém Login para acesso direto se necessário
 import Layout from "./components/Layout";
-import ProtectedRoute from "./components/ProtectedRoute";
+// import { SessionContextProvider } from "./components/SessionContextProvider"; // Temporariamente removido
+// import ProtectedRoute from "./components/ProtectedRoute"; // Temporariamente removido
 
 const queryClient = new QueryClient();
 
@@ -21,26 +21,17 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <SessionContextProvider>
-          <Routes>
-            {/* Rota de Login - acessível sem autenticação */}
-            <Route path="/login" element={<Login />} />
-
-            {/* Rotas Protegidas - exigem autenticação */}
-            <Route element={<ProtectedRoute />}>
-              {/* O Layout envolve todas as páginas protegidas */}
-              <Route element={<Layout />}>
-                <Route path="/" element={<Dashboard />} /> {/* Definir Dashboard como página inicial */}
-                <Route path="/opme-scanner" element={<OpmeScanner />} />
-                <Route path="/opme-registration" element={<OpmeRegistration />} />
-                <Route path="/linked-opme-view" element={<LinkedOpmeView />} />
-              </Route>
-            </Route>
-
-            {/* Rota Catch-all para páginas não encontradas */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </SessionContextProvider>
+        {/* Temporariamente ignorando SessionContextProvider e ProtectedRoute para depuração */}
+        <Routes>
+          <Route path="/login" element={<Login />} /> {/* Login ainda acessível */}
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/opme-scanner" element={<OpmeScanner />} />
+            <Route path="/opme-registration" element={<OpmeRegistration />} />
+            <Route path="/linked-opme-view" element={<LinkedOpmeView />} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
