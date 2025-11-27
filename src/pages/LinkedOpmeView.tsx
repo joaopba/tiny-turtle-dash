@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { toast } from "sonner";
-import { History, Search } from "lucide-react";
+import { History, Search, Loader2 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 
@@ -39,7 +39,7 @@ interface LinkedOpme {
   cps_id: number;
   opme_barcode: string;
   linked_at: string;
-  quantity: number; // Adicionado campo de quantidade
+  quantity: number;
   opmeDetails?: OpmeItem;
 }
 
@@ -102,7 +102,7 @@ const LinkedOpmeView = () => {
         (cpsData as LocalCpsRecord[]).map(async (cps) => {
           const { data: linkedOpmeData, error: linkedOpmeError } = await supabase
             .from("linked_opme")
-            .select("*") // Seleciona todas as colunas, incluindo 'quantity'
+            .select("*")
             .eq("user_id", userId)
             .eq("cps_id", cps.cps_id)
             .order("linked_at", { ascending: false });
@@ -137,94 +137,103 @@ const LinkedOpmeView = () => {
 
   const filteredCpsRecords = localCpsRecords.filter(record =>
     record.cps_id.toString().includes(searchTerm) ||
-    record.patient.toLowerCase().includes(searchTerm.toLowerCase())
+    record.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.professional?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.business_unit?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando histórico de bipagem...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">Carregando histórico de bipagem...</span>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-6">Histórico de Bipagem de OPME</h1>
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <h1 className="text-4xl font-extrabold text-center text-foreground mb-8">Histórico de Bipagem de OPME</h1>
 
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" /> OPMEs Bipados por Paciente (CPS)
+          <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+            <History className="h-6 w-6 text-primary" /> OPMEs Bipados por Paciente (CPS)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Buscar por CPS ou Nome do Paciente..."
-              className="pl-9"
+              placeholder="Buscar por CPS, Nome do Paciente, Profissional ou Unidade..."
+              className="pl-10 pr-4 py-2 text-base"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
           {filteredCpsRecords.length === 0 ? (
-            <p className="text-muted-foreground">Nenhum registro de CPS com OPMEs bipados encontrado para o termo de busca.</p>
+            <p className="text-muted-foreground text-center py-4">Nenhum registro de CPS com OPMEs bipados encontrado para o termo de busca.</p>
           ) : (
-            <Accordion type="multiple" className="w-full">
+            <Accordion type="multiple" className="w-full space-y-4">
               {filteredCpsRecords.map((cpsRecord) => (
-                <AccordionItem key={cpsRecord.id} value={cpsRecord.id}>
-                  <AccordionTrigger>
-                    <div className="flex justify-between w-full pr-4">
-                      <span>
+                <AccordionItem key={cpsRecord.id} value={cpsRecord.id} className="border rounded-lg shadow-sm bg-card">
+                  <AccordionTrigger className="px-6 py-4 hover:bg-accent/50 transition-colors duration-200 rounded-t-lg">
+                    <div className="flex flex-col sm:flex-row justify-between w-full pr-4 text-left">
+                      <span className="font-semibold text-lg text-foreground">
                         CPS: {cpsRecord.cps_id} - Paciente: {cpsRecord.patient}
                       </span>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground mt-1 sm:mt-0">
                         {new Date(cpsRecord.created_at).toLocaleDateString()}
                       </span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="p-4 border rounded-md bg-muted/20">
-                      <p className="text-sm mb-2">
-                        <strong>Profissional:</strong> {cpsRecord.professional || "N/A"}
-                      </p>
-                      <p className="text-sm mb-2">
-                        <strong>Convênio:</strong> {cpsRecord.agreement || "N/A"}
-                      </p>
-                      <p className="text-sm mb-4">
-                        <strong>Unidade de Negócio:</strong> {cpsRecord.business_unit || "N/A"}
-                      </p>
-
-                      <h3 className="text-md font-semibold mb-2">OPMEs Bipados:</h3>
-                      {cpsRecord.linkedOpme.length > 0 ? (
-                        <ScrollArea className="h-[150px] w-full rounded-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>OPME</TableHead>
-                                <TableHead>Lote</TableHead>
-                                <TableHead>Validade</TableHead>
-                                <TableHead>Cód. Barras</TableHead>
-                                <TableHead>Quantidade</TableHead> {/* Nova coluna */}
-                                <TableHead>Bipado Em</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {cpsRecord.linkedOpme.map((item: LinkedOpme) => (
-                                <TableRow key={item.id}>
-                                  <TableCell>{item.opmeDetails?.opme || "N/A"}</TableCell>
-                                  <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
-                                  <TableCell>{item.opmeDetails?.validade || "N/A"}</TableCell>
-                                  <TableCell>{item.opme_barcode}</TableCell>
-                                  <TableCell>{item.quantity}</TableCell> {/* Exibir quantidade */}
-                                  <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </ScrollArea>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">Nenhum OPME bipado para este CPS.</p>
-                      )}
+                  <AccordionContent className="px-6 py-4 border-t bg-muted/20 rounded-b-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-sm">
+                      <div>
+                        <strong className="text-foreground">Profissional:</strong> <span className="text-muted-foreground">{cpsRecord.professional || "N/A"}</span>
+                      </div>
+                      <div>
+                        <strong className="text-foreground">Convênio:</strong> <span className="text-muted-foreground">{cpsRecord.agreement || "N/A"}</span>
+                      </div>
+                      <div className="col-span-full">
+                        <strong className="text-foreground">Unidade de Negócio:</strong> <span className="text-muted-foreground">{cpsRecord.business_unit || "N/A"}</span>
+                      </div>
                     </div>
+
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      <Scan className="h-5 w-5 text-blue-500" /> OPMEs Bipados:
+                    </h3>
+                    {cpsRecord.linkedOpme.length > 0 ? (
+                      <ScrollArea className="h-[200px] w-full rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead>OPME</TableHead>
+                              <TableHead>Lote</TableHead>
+                              <TableHead>Validade</TableHead>
+                              <TableHead>Cód. Barras</TableHead>
+                              <TableHead className="text-right">Quantidade</TableHead>
+                              <TableHead>Bipado Em</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {cpsRecord.linkedOpme.map((item: LinkedOpme) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.opmeDetails?.opme || "N/A"}</TableCell>
+                                <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
+                                <TableCell>{item.opmeDetails?.validade || "N/A"}</TableCell>
+                                <TableCell>{item.opme_barcode}</TableCell>
+                                <TableCell className="text-right">{item.quantity}</TableCell>
+                                <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    ) : (
+                      <p className="text-muted-foreground text-sm text-center py-4">Nenhum OPME bipado para este CPS.</p>
+                    )}
                   </AccordionContent>
                 </AccordionItem>
               ))}

@@ -90,7 +90,7 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <span className="ml-2 text-muted-foreground">Carregando Dashboard...</span>
       </div>
@@ -98,89 +98,89 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-6">Dashboard do Sistema OPME</h1>
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <h1 className="text-4xl font-extrabold text-center text-foreground mb-8">Visão Geral do Sistema OPME</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de CPS Registrados</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de CPS Registrados</CardTitle>
+            <Package className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCps}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-foreground">{totalCps}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Registros de pacientes no sistema
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">CPS com Bipagem</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">CPS com Bipagem</CardTitle>
+            <CheckCircle className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{cpsWithLinkedOpme}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-foreground">{cpsWithLinkedOpme}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Pacientes com OPMEs bipados
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">CPS Sem Bipagem</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">CPS Sem Bipagem</CardTitle>
+            <XCircle className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{cpsWithoutLinkedOpme.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-foreground">{cpsWithoutLinkedOpme.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Pacientes aguardando bipagem
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de OPMEs Bipados</CardTitle>
-            <Scan className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de OPMEs Bipados</CardTitle>
+            <Scan className="h-5 w-5 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalLinkedOpme}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-foreground">{totalLinkedOpme}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Itens OPME registrados
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <XCircle className="h-5 w-5" /> CPS Sem Bipagem
+          <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+            <XCircle className="h-6 w-6 text-red-500" /> Pacientes com CPS Sem Bipagem
           </CardTitle>
         </CardHeader>
         <CardContent>
           {cpsWithoutLinkedOpme.length === 0 ? (
-            <p className="text-muted-foreground">Todos os CPS registrados possuem bipagens!</p>
+            <p className="text-muted-foreground text-center py-4">Todos os CPS registrados possuem bipagens!</p>
           ) : (
-            <ScrollArea className="h-[300px] w-full rounded-md border">
+            <ScrollArea className="h-[350px] w-full rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>CPS</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[100px]">CPS</TableHead>
                     <TableHead>Paciente</TableHead>
                     <TableHead>Profissional</TableHead>
                     <TableHead>Unidade</TableHead>
-                    <TableHead>Ação</TableHead>
+                    <TableHead className="text-right">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {cpsWithoutLinkedOpme.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell>{record.cps_id}</TableCell>
+                      <TableCell className="font-medium">{record.cps_id}</TableCell>
                       <TableCell>{record.patient}</TableCell>
                       <TableCell>{record.professional || "N/A"}</TableCell>
                       <TableCell>{record.business_unit || "N/A"}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Link to={`/opme-scanner?cps_id=${record.cps_id}`}>
                           <Button variant="outline" size="sm">
                             Bipar OPME

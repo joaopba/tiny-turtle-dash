@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Scan, Search, History } from "lucide-react";
+import { CalendarIcon, Scan, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { useSearchParams } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Importar Tabs
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CpsRecord {
   CREATED_AT: string;
@@ -75,7 +75,7 @@ const OpmeScanner = () => {
   const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
   const [cpsSearchInput, setCpsSearchInput] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<string>("bipar"); // Estado para controlar a aba ativa
+  const [activeTab, setActiveTab] = useState<string>("bipar");
 
   useEffect(() => {
     if (!userId) {
@@ -179,8 +179,6 @@ const OpmeScanner = () => {
 
       // 2. Se não houver dados locais para o CPS específico ou se for forçado, buscar da API externa
       if (specificCpsId && (!recordsToProcess.find(r => r.CPS === specificCpsId) || forceApiFetch)) {
-        // Se estamos buscando um CPS específico, a API externa precisa de um período.
-        // Usaremos o dia atual como fallback se as datas não estiverem definidas.
         const apiStartDate = formattedStartDate || format(new Date(), "yyyy-MM-dd");
         const apiEndDate = formattedEndDate || format(new Date(), "yyyy-MM-dd");
 
@@ -188,7 +186,7 @@ const OpmeScanner = () => {
           body: {
             start_date: apiStartDate,
             end_date: apiEndDate,
-            business_unit: businessUnit, // A API externa ainda precisa da unidade de negócio
+            business_unit: businessUnit,
           },
         });
 
@@ -199,11 +197,10 @@ const OpmeScanner = () => {
         if (data && Array.isArray(data)) {
           const foundInApi = data.find((record: CpsRecord) => record.CPS === specificCpsId);
           if (foundInApi) {
-            recordsToProcess = [foundInApi]; // Apenas o CPS específico
+            recordsToProcess = [foundInApi];
             setCpsRecords(recordsToProcess);
             toast.success(`CPS ${specificCpsId} encontrado na API externa.`);
 
-            // Salvar/atualizar no banco de dados local
             await supabase
               .from('local_cps_records')
               .upsert({
@@ -220,7 +217,6 @@ const OpmeScanner = () => {
           }
         }
       } else if (!specificCpsId && (recordsToProcess.length === 0 || forceApiFetch)) {
-        // Busca por período na API externa se não houver dados locais ou for forçado
         if (!formattedStartDate || !formattedEndDate) {
           toast.error("Por favor, selecione a data inicial e final para buscar na API externa.");
           setLoadingCps(false);
@@ -242,7 +238,6 @@ const OpmeScanner = () => {
           setCpsRecords(data);
           toast.success(`Foram encontrados ${data.length} registros de CPS.`);
 
-          // Salvar/atualizar dados da API externa no banco de dados local
           await supabase
             .from('local_cps_records')
             .upsert(data.map((record: CpsRecord) => ({
@@ -272,48 +267,40 @@ const OpmeScanner = () => {
   }, [fetchOpmeInventory]);
 
   useEffect(() => {
-    // Auto-fetch CPS records on mount for today's date
     if (userId) {
       const today = new Date();
       setStartDate(today);
       setEndDate(today);
-      // fetchCpsRecords will be called by the effect below when startDate/endDate change
     }
   }, [userId]);
 
   useEffect(() => {
-    // Trigger fetchCpsRecords when startDate, endDate, businessUnit change
     if (startDate && endDate && businessUnit && userId) {
       fetchCpsRecords();
     }
   }, [startDate, endDate, businessUnit, userId, fetchCpsRecords]);
 
-
-  // Handle URL parameter for direct CPS selection
   useEffect(() => {
     const cpsIdFromUrl = searchParams.get('cps_id');
     if (cpsIdFromUrl && userId) {
       setCpsSearchInput(cpsIdFromUrl);
-      handleCpsSearch(cpsIdFromUrl); // Tenta buscar e selecionar o CPS da URL
-      setSearchParams({}); // Limpa o parâmetro da URL após o uso
+      handleCpsSearch(cpsIdFromUrl);
+      setSearchParams({});
     }
   }, [searchParams, userId, setSearchParams]);
 
-  // Fetch linked OPME when selectedCps changes
   useEffect(() => {
     fetchLinkedOpme();
   }, [selectedCps, fetchLinkedOpme]);
 
-
   const handleSelectCps = useCallback(async (record: CpsRecord) => {
     setSelectedCps(record);
-    setActiveTab("bipar"); // Mudar para a aba de bipagem ao selecionar um CPS
+    setActiveTab("bipar");
     if (!userId) {
       toast.error("Você precisa estar logado para selecionar um CPS.");
       return;
     }
 
-    // Save or update the selected CPS record in local_cps_records table
     const { data, error } = await supabase
       .from('local_cps_records')
       .upsert({
@@ -358,7 +345,6 @@ const OpmeScanner = () => {
       return;
     }
 
-    // 1. Verificar se o item já existe para este CPS e usuário
     const { data: existingLinkedItem, error: fetchError } = await supabase
       .from("linked_opme")
       .select("id, quantity")
@@ -374,7 +360,6 @@ const OpmeScanner = () => {
     }
 
     if (existingLinkedItem) {
-      // 2. Se existir, incrementar sua quantidade
       const newQuantity = existingLinkedItem.quantity + 1;
       const { error: updateError } = await supabase
         .from("linked_opme")
@@ -388,7 +373,6 @@ const OpmeScanner = () => {
       }
       toast.success(`Quantidade do OPME ${barcodeInput} para o paciente ${selectedCps.PATIENT} incrementada para ${newQuantity}.`);
     } else {
-      // 3. Se não existir, inserir um novo registro com quantity: 1
       const newLinkedItem = {
         cps_id: selectedCps.CPS,
         opme_barcode: barcodeInput,
@@ -429,15 +413,12 @@ const OpmeScanner = () => {
       return;
     }
 
-    // Tenta encontrar nos registros já carregados
     const foundCps = cpsRecords.find(record => record.CPS === parsedCpsId);
     if (foundCps) {
       handleSelectCps(foundCps);
       toast.success(`CPS ${foundCps.CPS} encontrado e selecionado.`);
     } else {
-      // Se não encontrado, tenta buscar especificamente esse CPS
-      await fetchCpsRecords(true, parsedCpsId); // Força busca na API para este CPS
-      // Após a busca, verifica novamente se foi encontrado e seleciona
+      await fetchCpsRecords(true, parsedCpsId);
       const updatedCpsRecords = await supabase
         .from('local_cps_records')
         .select('*')
@@ -464,18 +445,18 @@ const OpmeScanner = () => {
 
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-3xl font-bold text-center mb-6">Sistema de Bipagem de OPME</h1>
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <h1 className="text-4xl font-extrabold text-center text-foreground mb-8">Bipagem de OPME</h1>
 
       {/* Busca Direta de CPS */}
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" /> Buscar CPS por Número
+          <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+            <Search className="h-6 w-6 text-primary" /> Buscar CPS por Número
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Digite o número do CPS"
               value={cpsSearchInput}
@@ -485,8 +466,9 @@ const OpmeScanner = () => {
                   handleCpsSearch();
                 }
               }}
+              className="flex-1"
             />
-            <Button onClick={() => handleCpsSearch()}>Buscar CPS</Button>
+            <Button onClick={() => handleCpsSearch()} className="w-full sm:w-auto">Buscar CPS</Button>
           </div>
           <p className="text-sm text-muted-foreground">
             Use este campo para selecionar um CPS diretamente.
@@ -495,16 +477,16 @@ const OpmeScanner = () => {
       </Card>
 
       {/* CPS Record Search and Selection by Period */}
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" /> Buscar Paciente (CPS) por Período
+          <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+            <Search className="h-6 w-6 text-primary" /> Buscar Paciente (CPS) por Período
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="start-date">Data Inicial</Label>
+              <Label htmlFor="start-date" className="text-sm font-medium">Data Inicial</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -529,7 +511,7 @@ const OpmeScanner = () => {
               </Popover>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="end-date">Data Final</Label>
+              <Label htmlFor="end-date" className="text-sm font-medium">Data Final</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -554,7 +536,7 @@ const OpmeScanner = () => {
               </Popover>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="business-unit">Unidade de Negócio</Label>
+              <Label htmlFor="business-unit" className="text-sm font-medium">Unidade de Negócio</Label>
               <Select value={businessUnit} onValueChange={setBusinessUnit}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione a unidade" />
@@ -566,38 +548,41 @@ const OpmeScanner = () => {
               </Select>
             </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => fetchCpsRecords(true)} disabled={loadingCps} variant="secondary">
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <Button onClick={() => fetchCpsRecords(true)} disabled={loadingCps} variant="secondary" className="w-full sm:w-auto">
               {loadingCps ? "Atualizando da API..." : "Atualizar da API Externa"}
             </Button>
-            <Button onClick={() => fetchCpsRecords(false)} disabled={loadingCps} className="w-full md:w-auto">
+            <Button onClick={() => fetchCpsRecords(false)} disabled={loadingCps} className="w-full sm:w-auto">
               {loadingCps ? "Buscando..." : "Buscar CPS"}
             </Button>
           </div>
 
           {loadingCps ? (
-            <p className="text-center text-muted-foreground mt-4">Carregando registros de CPS...</p>
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">Carregando registros de CPS...</span>
+            </div>
           ) : cpsRecords.length > 0 ? (
-            <ScrollArea className="h-[200px] w-full rounded-md border mt-4">
+            <ScrollArea className="h-[250px] w-full rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>CPS</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[100px]">CPS</TableHead>
                     <TableHead>Paciente</TableHead>
                     <TableHead>Profissional</TableHead>
-                    <TableHead>Ação</TableHead>
+                    <TableHead className="text-right">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {cpsRecords.map((record) => (
                     <TableRow
                       key={record.CPS}
-                      className={selectedCps?.CPS === record.CPS ? "bg-accent" : ""}
+                      className={selectedCps?.CPS === record.CPS ? "bg-accent/50" : ""}
                     >
-                      <TableCell>{record.CPS}</TableCell>
+                      <TableCell className="font-medium">{record.CPS}</TableCell>
                       <TableCell>{record.PATIENT}</TableCell>
                       <TableCell>{record.PROFESSIONAL}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="outline"
                           size="sm"
@@ -612,27 +597,27 @@ const OpmeScanner = () => {
               </Table>
             </ScrollArea>
           ) : (
-            <p className="text-muted-foreground mt-4">Nenhum registro de CPS encontrado para os critérios selecionados.</p>
+            <p className="text-muted-foreground text-center py-4">Nenhum registro de CPS encontrado para os critérios selecionados.</p>
           )}
         </CardContent>
       </Card>
 
       {/* OPME Scanning Section with Tabs */}
       {selectedCps && (
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scan className="h-5 w-5" /> Gerenciar OPME para Paciente: {selectedCps.PATIENT} (CPS: {selectedCps.CPS})
+            <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+              <Scan className="h-6 w-6 text-primary" /> Gerenciar OPME para Paciente: <span className="text-blue-600 dark:text-blue-400">{selectedCps.PATIENT}</span> (CPS: <span className="text-blue-600 dark:text-blue-400">{selectedCps.CPS}</span>)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="bipar">Bipar OPME</TabsTrigger>
-                <TabsTrigger value="itens-bipados">Itens Bipados</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 h-10">
+                <TabsTrigger value="bipar" className="text-base">Bipar OPME</TabsTrigger>
+                <TabsTrigger value="itens-bipados" className="text-base">Itens Bipados</TabsTrigger>
               </TabsList>
-              <TabsContent value="bipar" className="mt-4 space-y-4">
-                <div className="flex gap-2">
+              <TabsContent value="bipar" className="mt-6 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Input
                     placeholder="Código de Barras do OPME"
                     value={barcodeInput}
@@ -643,35 +628,36 @@ const OpmeScanner = () => {
                       }
                     }}
                     autoFocus
+                    className="flex-1 p-2 text-lg"
                   />
-                  <Button onClick={handleBarcodeScan}>Bipar OPME</Button>
+                  <Button onClick={handleBarcodeScan} className="w-full sm:w-auto text-lg py-6">Bipar OPME</Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Digite ou escaneie o código de barras do OPME. Se o item já foi bipado, a quantidade será incrementada.
                 </p>
               </TabsContent>
-              <TabsContent value="itens-bipados" className="mt-4 space-y-4">
+              <TabsContent value="itens-bipados" className="mt-6 space-y-4">
                 {linkedOpme.length > 0 ? (
-                  <ScrollArea className="h-[200px] w-full rounded-md border">
+                  <ScrollArea className="h-[250px] w-full rounded-md border">
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-muted/50">
                           <TableHead>OPME</TableHead>
                           <TableHead>Lote</TableHead>
                           <TableHead>Validade</TableHead>
                           <TableHead>Cód. Barras</TableHead>
-                          <TableHead>Quantidade</TableHead>
+                          <TableHead className="text-right">Quantidade</TableHead>
                           <TableHead>Bipado Em</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {linkedOpme.map((item) => (
                           <TableRow key={item.id}>
-                            <TableCell>{item.opmeDetails?.opme || "N/A"}</TableCell>
+                            <TableCell className="font-medium">{item.opmeDetails?.opme || "N/A"}</TableCell>
                             <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
                             <TableCell>{item.opmeDetails?.validade || "N/A"}</TableCell>
                             <TableCell>{item.opme_barcode}</TableCell>
-                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell className="text-right">{item.quantity}</TableCell>
                             <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
                           </TableRow>
                         ))}
@@ -679,7 +665,7 @@ const OpmeScanner = () => {
                     </Table>
                   </ScrollArea>
                 ) : (
-                  <p className="text-muted-foreground">Nenhum OPME bipado para este paciente ainda.</p>
+                  <p className="text-muted-foreground text-center py-4">Nenhum OPME bipado para este paciente ainda.</p>
                 )}
               </TabsContent>
             </Tabs>

@@ -10,18 +10,17 @@ import { Navigate } from 'react-router-dom';
 function Login() {
   const { session } = useSession();
 
-  // Se o usuário já estiver logado, redirecionar para a página inicial
   if (session) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4">
-      <div className="w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-center mb-6">Bem-vindo</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 p-4">
+      <div className="w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700">
+        <h1 className="text-4xl font-extrabold text-center mb-8 text-primary dark:text-primary-foreground">Bem-vindo</h1>
         <Auth
           supabaseClient={supabase}
-          providers={[]} // Apenas e-mail/senha por enquanto
+          providers={[]}
           appearance={{
             theme: ThemeSupa,
             variables: {
@@ -29,15 +28,31 @@ function Login() {
                 colors: {
                   brand: 'hsl(var(--primary))',
                   brandAccent: 'hsl(var(--primary-foreground))',
+                  defaultButtonBackground: 'hsl(var(--primary))',
+                  defaultButtonBackgroundHover: 'hsl(var(--primary-foreground))',
+                  defaultButtonBorder: 'hsl(var(--primary))',
+                  defaultButtonText: 'hsl(var(--primary-foreground))',
+                  inputBackground: 'hsl(var(--input))',
+                  inputBorder: 'hsl(var(--border))',
+                  inputBorderHover: 'hsl(var(--ring))',
+                  inputBorderFocus: 'hsl(var(--ring))',
+                  inputText: 'hsl(var(--foreground))',
+                },
+                radii: {
+                  borderRadiusButton: 'var(--radius)',
+                  buttonBorderRadius: 'var(--radius)',
+                  inputBorderRadius: 'var(--radius)',
                 },
               },
             },
           }}
-          theme="light" // Usar tema claro, ajustar se o modo escuro for preferido
-          redirectTo={window.location.origin} // Redirecionar para a origem atual após o login
+          theme="light"
+          redirectTo={window.location.origin}
         />
       </div>
-      <MadeWithDyad />
+      <div className="mt-8">
+        <MadeWithDyad />
+      </div>
     </div>
   );
 }
