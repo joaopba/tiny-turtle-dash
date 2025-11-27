@@ -19,12 +19,15 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log("Auth state change event:", event);
+        console.log("Current session from auth state change:", currentSession);
         setSession(currentSession);
         setLoading(false);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial session from getSession():", session);
       setSession(session);
       setLoading(false);
     }).catch(error => {

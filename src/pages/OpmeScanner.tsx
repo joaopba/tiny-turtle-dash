@@ -71,8 +71,18 @@ const OpmeScanner = () => {
   const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
 
+  useEffect(() => {
+    console.log("OpmeScanner - Current userId:", userId);
+    if (!userId) {
+      toast.error("ID do usuário não disponível. Por favor, faça login novamente.");
+    }
+  }, [userId]);
+
   const fetchOpmeInventory = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.warn("fetchOpmeInventory: userId is null, skipping fetch.");
+      return;
+    }
     const { data, error } = await supabase
       .from("opme_inventory")
       .select("*")
@@ -87,7 +97,12 @@ const OpmeScanner = () => {
   }, [userId]);
 
   const fetchLinkedOpme = useCallback(async () => {
-    if (!userId || !selectedCps) {
+    if (!userId) {
+      console.warn("fetchLinkedOpme: userId is null, skipping fetch.");
+      setLinkedOpme([]);
+      return;
+    }
+    if (!selectedCps) {
       setLinkedOpme([]);
       return;
     }
@@ -151,6 +166,10 @@ const OpmeScanner = () => {
   const fetchCpsRecords = async () => {
     if (!startDate || !endDate || !businessUnit) {
       toast.error("Por favor, selecione a data inicial, final e a unidade de negócio.");
+      return;
+    }
+    if (!userId) {
+      toast.error("ID do usuário não disponível para buscar registros de CPS.");
       return;
     }
 
