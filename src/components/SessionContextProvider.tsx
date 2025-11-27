@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SessionContextType {
   session: Session | null;
@@ -16,38 +16,54 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    console.log("SessionContextProvider: Initializing auth listener.");
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log("SessionContextProvider: Auth state changed. Event:", event, "Session:", currentSession);
         setSession(currentSession);
         setLoading(false);
 
         if (event === 'SIGNED_IN') {
-          navigate('/'); // Redirect to home after sign in
+          console.log("SessionContextProvider: SIGNED_IN. Redirecting to /.");
+          navigate('/');
         } else if (event === 'SIGNED_OUT') {
-          navigate('/login'); // Redirect to login after sign out
+          console.log("SessionContextProvider: SIGNED_OUT. Redirecting to /login.");
+          navigate('/login');
         }
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("SessionContextProvider: Initial getSession result:", session);
       setSession(session);
       setLoading(false);
-      if (!session) {
+      if (!session && location.pathname !== '/login') {
+        console.log("SessionContextProvider: No session and not on login page. Redirecting to /login.");
+        navigate('/login');
+      }
+    }).catch(error => {
+      console.error("SessionContextProvider: Error getting session:", error);
+      setLoading(false);
+      if (location.pathname !== '/login') {
         navigate('/login');
       }
     });
 
     return () => {
+      console.log("SessionContextProvider: Unsubscribing auth listener.");
       authListener.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   if (loading) {
+    console.log("SessionContextProvider: Rendering loading state.");
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
   }
 
+  console.log("SessionContextProvider: Rendering children. Current session:", session);
   return (
     <SessionContext.Provider value={{ session, supabase }}>
       {children}
