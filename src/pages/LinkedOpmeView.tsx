@@ -7,8 +7,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { toast } from "sonner";
-import { History } from "lucide-react";
+import { History, Search } from "lucide-react"; // Added Search icon
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input"; // Import Input component
 
 interface LocalCpsRecord {
   id: string;
@@ -45,9 +46,10 @@ const LinkedOpmeView = () => {
   const { session } = useSession();
   const userId = session?.user?.id;
 
-  const [localCpsRecords, setLocalCpsRecords] = useState<LocalCpsRecord[]>([]);
+  const [localCpsRecords, setLocalCpsRecords] = useState<(LocalCpsRecord & { linkedOpme: LinkedOpme[] })[]>([]);
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState<string>(""); // New state for search term
 
   const fetchOpmeInventory = useCallback(async () => {
     if (!userId) return [];
@@ -123,6 +125,11 @@ const LinkedOpmeView = () => {
     fetchLinkedData();
   }, [fetchLinkedData]);
 
+  const filteredCpsRecords = localCpsRecords.filter(record =>
+    record.cps_id.toString().includes(searchTerm) ||
+    record.patient.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Carregando histórico de bipagem...</div>;
   }
@@ -138,11 +145,21 @@ const LinkedOpmeView = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {localCpsRecords.length === 0 ? (
-            <p className="text-muted-foreground">Nenhum registro de CPS com OPMEs bipados encontrado.</p>
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por CPS ou Nome do Paciente..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {filteredCpsRecords.length === 0 ? (
+            <p className="text-muted-foreground">Nenhum registro de CPS com OPMEs bipados encontrado para o termo de busca.</p>
           ) : (
             <Accordion type="multiple" className="w-full">
-              {localCpsRecords.map((cpsRecord) => (
+              {filteredCpsRecords.map((cpsRecord) => (
                 <AccordionItem key={cpsRecord.id} value={cpsRecord.id}>
                   <AccordionTrigger>
                     <div className="flex justify-between w-full pr-4">
@@ -167,7 +184,7 @@ const LinkedOpmeView = () => {
                       </p>
 
                       <h3 className="text-md font-semibold mb-2">OPMEs Bipados:</h3>
-                      {(cpsRecord as any).linkedOpme.length > 0 ? (
+                      {cpsRecord.linkedOpme.length > 0 ? (
                         <ScrollArea className="h-[150px] w-full rounded-md border">
                           <Table>
                             <TableHeader>
@@ -180,7 +197,7 @@ const LinkedOpmeView = () => {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {(cpsRecord as any).linkedOpme.map((item: LinkedOpme) => (
+                              {cpsRecord.linkedOpme.map((item: LinkedOpme) => (
                                 <TableRow key={item.id}>
                                   <TableCell>{item.opmeDetails?.opme || "N/A"}</TableCell>
                                   <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
