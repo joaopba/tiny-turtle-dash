@@ -39,6 +39,7 @@ interface LinkedOpme {
   cps_id: number;
   opme_barcode: string;
   linked_at: string;
+  quantity: number; // Adicionado campo de quantidade
   opmeDetails?: OpmeItem;
 }
 
@@ -101,7 +102,7 @@ const LinkedOpmeView = () => {
         (cpsData as LocalCpsRecord[]).map(async (cps) => {
           const { data: linkedOpmeData, error: linkedOpmeError } = await supabase
             .from("linked_opme")
-            .select("*")
+            .select("*") // Seleciona todas as colunas, incluindo 'quantity'
             .eq("user_id", userId)
             .eq("cps_id", cps.cps_id)
             .order("linked_at", { ascending: false });
@@ -202,6 +203,7 @@ const LinkedOpmeView = () => {
                                 <TableHead>Lote</TableHead>
                                 <TableHead>Validade</TableHead>
                                 <TableHead>Cód. Barras</TableHead>
+                                <TableHead>Quantidade</TableHead> {/* Nova coluna */}
                                 <TableHead>Bipado Em</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -212,6 +214,7 @@ const LinkedOpmeView = () => {
                                   <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
                                   <TableCell>{item.opmeDetails?.validade || "N/A"}</TableCell>
                                   <TableCell>{item.opme_barcode}</TableCell>
+                                  <TableCell>{item.quantity}</TableCell> {/* Exibir quantidade */}
                                   <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
                                 </TableRow>
                               ))}

@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
+import { useSearchParams } from "react-router-dom"; // Importar useSearchParams
 
 interface CpsRecord {
   CREATED_AT: string;
@@ -54,12 +55,14 @@ interface LinkedOpme {
   cps_id: number;
   opme_barcode: string;
   linked_at: string;
+  quantity: number; // Adicionado campo de quantidade
   opmeDetails?: OpmeItem;
 }
 
 const OpmeScanner = () => {
   const { session } = useSession();
   const userId = session?.user?.id;
+  const [searchParams] = useSearchParams(); // Hook para ler parâmetros da URL
 
   const [startDate, setStartDate] = useState<Date | undefined>(new Date());
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
@@ -70,6 +73,7 @@ const OpmeScanner = () => {
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
+  const [cpsSearchInput, setCpsSearchInput] = useState<string>(""); // Novo estado para busca direta de CPS
 
   useEffect(() => {
     console.log("OpmeScanner - Current userId:", userId);
@@ -110,7 +114,7 @@ const OpmeScanner = () => {
 
     const { data, error } = await supabase
       .from("linked_opme")
-      .select("*")
+      .select("*") // Seleciona todas as colunas, incluindo 'quantity'
       .eq("user_id", userId)
       .eq("cps_id", selectedCps.CPS);
 
@@ -129,7 +133,7 @@ const OpmeScanner = () => {
     }
   }, [userId, selectedCps, opmeInventory]);
 
-  const fetchCpsRecords = useCallback(async () => {
+  const fetchCpsRecords = useCallback(async (forceApiFetch = false) => {
     if (!startDate || !endDate || !businessUnit) {
       toast.error("Por favor, selecione a data inicial, final e a unidade de negócio.");
       return;
@@ -147,25 +151,80 @@ const OpmeScanner = () => {
     const formattedEndDate = format(endDate, "yyyy-MM-dd");
 
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-cps-records', {
-        body: {
-          start_date: formattedStartDate,
-          end_date: formattedEndDate,
-          business_unit: businessUnit,
-        },
-      });
+      // 1. Tentar buscar do banco de dados local primeiro
+      const { data: localData, error: localError } = await supabase
+        .from('local_cps_records')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('created_at', `${formattedStartDate}T00:00:00.000Z`)
+        .lte('created_at', `${formattedEndDate}T23:59:59.999Z`)
+        .eq('business_unit', businessUnit);
 
-      if (error) {
-        throw new Error(error.message);
+      if (localError) {
+        console.error("Erro ao buscar registros de CPS locais:", localError);
+        // Não impede a busca na API externa, apenas loga o erro
       }
 
-      if (data && Array.isArray(data)) {
-        console.log("OpmeScanner - Registros de CPS externos:", data);
-        setCpsRecords(data);
-        toast.success(`Foram encontrados ${data.length} registros de CPS.`);
-      } else {
-        console.log("OpmeScanner - Nenhum registro de CPS externo encontrado ou formato de dados inesperado.");
-        toast.warning("Nenhum registro de CPS encontrado ou formato de dados inesperado.");
+      let recordsToProcess: CpsRecord[] = [];
+      if (localData && localData.length > 0 && !forceApiFetch) {
+        console.log("OpmeScanner - Registros de CPS locais encontrados:", localData);
+        recordsToProcess = localData.map(record => ({
+          CPS: record.cps_id,
+          PATIENT: record.patient,
+          PROFESSIONAL: record.professional,
+          AGREEMENT: record.agreement,
+          UNIDADENEGOCIO: record.business_unit,
+          CREATED_AT: record.created_at,
+          TIPO: '', SITUACAO: '', ATENDANT: '', TREATMENT: null, REGISTRATION: null, A_CID: '', DATA_ALTA: null, DATAENTREGA: null, DATARAT: null, DATA_FECHADO: '', DATA_RECEBIMENTO: null, // Campos dummy para corresponder à interface
+        }));
+        setCpsRecords(recordsToProcess);
+        toast.success(`Foram encontrados ${recordsToProcess.length} registros de CPS locais.`);
+      }
+
+      // 2. Se não houver dados locais ou se for forçado, buscar da API externa
+      if (recordsToProcess.length === 0 || forceApiFetch) {
+        console.log("OpmeScanner - Buscando registros de CPS na API externa...");
+        const { data, error } = await supabase.functions.invoke('fetch-cps-records', {
+          body: {
+            start_date: formattedStartDate,
+            end_date: formattedEndDate,
+            business_unit: businessUnit,
+          },
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (data && Array.isArray(data)) {
+          console.log("OpmeScanner - Registros de CPS externos:", data);
+          setCpsRecords(data);
+          toast.success(`Foram encontrados ${data.length} registros de CPS.`);
+
+          // Salvar/atualizar dados da API externa no banco de dados local
+          const { error: upsertError } = await supabase
+            .from('local_cps_records')
+            .upsert(data.map((record: CpsRecord) => ({
+              user_id: userId,
+              cps_id: record.CPS,
+              patient: record.PATIENT,
+              professional: record.PROFESSIONAL,
+              agreement: record.AGREEMENT,
+              business_unit: record.UNIDADENEGOCIO,
+              created_at: record.CREATED_AT,
+            })), { onConflict: 'cps_id, user_id' });
+
+          if (upsertError) {
+            console.error("Erro ao salvar CPS da API externa localmente:", upsertError);
+            toast.error("Falha ao salvar detalhes do CPS da API externa localmente.");
+          } else {
+            console.log("CPS da API externa salvo/atualizado localmente.");
+          }
+
+        } else {
+          console.log("OpmeScanner - Nenhum registro de CPS externo encontrado ou formato de dados inesperado.");
+          toast.warning("Nenhum registro de CPS encontrado ou formato de dados inesperado.");
+        }
       }
     } catch (error: any) {
       console.error("Erro ao buscar registros de CPS:", error.message);
@@ -173,7 +232,7 @@ const OpmeScanner = () => {
     } finally {
       setLoadingCps(false);
     }
-  }, [startDate, endDate, businessUnit, userId]); // Adicionado userId às dependências
+  }, [startDate, endDate, businessUnit, userId]);
 
   useEffect(() => {
     fetchOpmeInventory();
@@ -183,12 +242,33 @@ const OpmeScanner = () => {
     fetchLinkedOpme();
   }, [fetchLinkedOpme]);
 
-  // Auto-fetch CPS records on mount
+  // Auto-fetch CPS records on mount and handle URL parameter
   useEffect(() => {
-    if (userId) { // Só busca se o userId estiver disponível
+    if (userId) {
       fetchCpsRecords();
+
+      const cpsIdFromUrl = searchParams.get('cps_id');
+      if (cpsIdFromUrl) {
+        setCpsSearchInput(cpsIdFromUrl);
+        // Tentar selecionar o CPS após os registros serem carregados
+        // Isso será feito no useEffect que observa cpsRecords
+      }
     }
-  }, [userId, fetchCpsRecords]); // Adicionado userId e fetchCpsRecords às dependências
+  }, [userId, fetchCpsRecords, searchParams]);
+
+  // Efeito para selecionar o CPS se ele vier da URL ou da busca direta
+  useEffect(() => {
+    if (cpsSearchInput && cpsRecords.length > 0) {
+      const foundCps = cpsRecords.find(record => record.CPS.toString() === cpsSearchInput);
+      if (foundCps) {
+        handleSelectCps(foundCps);
+        toast.info(`CPS ${foundCps.CPS} selecionado automaticamente.`);
+      } else {
+        toast.warning(`CPS ${cpsSearchInput} não encontrado nos registros atuais.`);
+      }
+    }
+  }, [cpsSearchInput, cpsRecords, handleSelectCps]);
+
 
   const handleSelectCps = useCallback(async (record: CpsRecord) => {
     setSelectedCps(record);
@@ -207,6 +287,7 @@ const OpmeScanner = () => {
         professional: record.PROFESSIONAL,
         agreement: record.AGREEMENT,
         business_unit: record.UNIDADENEGOCIO,
+        created_at: record.CREATED_AT, // Garante que o created_at seja salvo
       }, { onConflict: 'cps_id, user_id' }) // Conflict on cps_id and user_id to update existing
       .select();
 
@@ -241,39 +322,114 @@ const OpmeScanner = () => {
       return;
     }
 
-    const newLinkedItem = {
-      cps_id: selectedCps.CPS,
-      opme_barcode: barcodeInput,
-      user_id: userId,
-    };
-
-    const { error } = await supabase
+    // 1. Verificar se o item já existe para este CPS e usuário
+    const { data: existingLinkedItem, error: fetchError } = await supabase
       .from("linked_opme")
-      .insert(newLinkedItem);
+      .select("id, quantity")
+      .eq("user_id", userId)
+      .eq("cps_id", selectedCps.CPS)
+      .eq("opme_barcode", barcodeInput)
+      .single(); // Usar single para obter um registro ou null
 
-    if (error) {
-      if (error.code === '23505') { // Unique constraint violation
-        toast.warning("Este OPME já foi bipado para este paciente.");
-      } else {
-        console.error("Erro ao bipar OPME:", error);
-        toast.error(`Falha ao bipar OPME: ${error.message}`);
-      }
-    } else {
-      toast.success(`OPME com código ${barcodeInput} bipado para o paciente ${selectedCps.PATIENT}.`);
-      fetchLinkedOpme(); // Refresh linked OPME
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 significa "no rows found"
+      console.error("Erro ao verificar OPME existente:", fetchError);
+      toast.error(`Falha ao verificar OPME: ${fetchError.message}`);
+      return;
     }
+
+    if (existingLinkedItem) {
+      // 2. Se existir, incrementar sua quantidade
+      const newQuantity = existingLinkedItem.quantity + 1;
+      const { error: updateError } = await supabase
+        .from("linked_opme")
+        .update({ quantity: newQuantity })
+        .eq("id", existingLinkedItem.id);
+
+      if (updateError) {
+        console.error("Erro ao incrementar quantidade do OPME:", updateError);
+        toast.error(`Falha ao incrementar quantidade: ${updateError.message}`);
+        return;
+      }
+      toast.success(`Quantidade do OPME ${barcodeInput} para o paciente ${selectedCps.PATIENT} incrementada para ${newQuantity}.`);
+    } else {
+      // 3. Se não existir, inserir um novo registro com quantity: 1
+      const newLinkedItem = {
+        cps_id: selectedCps.CPS,
+        opme_barcode: barcodeInput,
+        user_id: userId,
+        quantity: 1,
+      };
+
+      const { error: insertError } = await supabase
+        .from("linked_opme")
+        .insert(newLinkedItem);
+
+      if (insertError) {
+        console.error("Erro ao bipar OPME:", insertError);
+        toast.error(`Falha ao bipar OPME: ${insertError.message}`);
+        return;
+      }
+      toast.success(`OPME com código ${barcodeInput} bipado para o paciente ${selectedCps.PATIENT}.`);
+    }
+
     setBarcodeInput("");
+    fetchLinkedOpme(); // Atualizar a lista de OPMEs bipados
+  };
+
+  const handleCpsSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCpsSearchInput(e.target.value);
+  };
+
+  const handleCpsSearch = () => {
+    if (!cpsSearchInput) {
+      toast.warning("Por favor, insira um número de CPS para buscar.");
+      return;
+    }
+    const foundCps = cpsRecords.find(record => record.CPS.toString() === cpsSearchInput);
+    if (foundCps) {
+      handleSelectCps(foundCps);
+      toast.success(`CPS ${foundCps.CPS} encontrado e selecionado.`);
+    } else {
+      toast.error(`CPS ${cpsSearchInput} não encontrado nos registros atuais. Tente buscar por data.`);
+    }
   };
 
   return (
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold text-center mb-6">Sistema de Bipagem de OPME</h1>
 
+      {/* Busca Direta de CPS */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" /> Buscar CPS por Número
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Digite o número do CPS"
+              value={cpsSearchInput}
+              onChange={handleCpsSearchInputChange}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  handleCpsSearch();
+                }
+              }}
+            />
+            <Button onClick={handleCpsSearch}>Buscar CPS</Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Use este campo para selecionar um CPS diretamente se você já souber o número.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* CPS Record Search and Selection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" /> Buscar e Selecionar Paciente (CPS)
+            <Search className="h-5 w-5" /> Buscar e Selecionar Paciente (CPS) por Período
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -341,8 +497,11 @@ const OpmeScanner = () => {
               </Select>
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={fetchCpsRecords} disabled={loadingCps} className="w-full md:w-auto">
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => fetchCpsRecords(true)} disabled={loadingCps} variant="secondary">
+              {loadingCps ? "Atualizando da API..." : "Atualizar da API Externa"}
+            </Button>
+            <Button onClick={() => fetchCpsRecords(false)} disabled={loadingCps} className="w-full md:w-auto">
               {loadingCps ? "Buscando..." : "Buscar CPS"}
             </Button>
           </div>
@@ -422,6 +581,7 @@ const OpmeScanner = () => {
                       <TableHead>Lote</TableHead>
                       <TableHead>Validade</TableHead>
                       <TableHead>Cód. Barras</TableHead>
+                      <TableHead>Quantidade</TableHead> {/* Nova coluna */}
                       <TableHead>Bipado Em</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -432,6 +592,7 @@ const OpmeScanner = () => {
                         <TableCell>{item.opmeDetails?.lote || "N/A"}</TableCell>
                         <TableCell>{item.opmeDetails?.validade || "N/A"}</TableCell>
                         <TableCell>{item.opme_barcode}</TableCell>
+                        <TableCell>{item.quantity}</TableCell> {/* Exibir quantidade */}
                         <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
