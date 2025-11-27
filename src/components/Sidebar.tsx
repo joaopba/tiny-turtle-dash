@@ -3,10 +3,13 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Package, Scan, Home, History } from "lucide-react"; // Added History icon
+import { Package, Scan, Home, History, LogOut } from "lucide-react"; // Added LogOut icon
+import { useSession } from "./SessionContextProvider"; // Import useSession
+import { Button } from "./ui/button"; // Import Button
 
 const Sidebar = () => {
   const location = useLocation();
+  const { supabase } = useSession(); // Get supabase client from context
 
   const navItems = [
     {
@@ -31,6 +34,11 @@ const Sidebar = () => {
     },
   ];
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    // The SessionContextProvider will handle the redirect to /login
+  };
+
   return (
     <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border p-4 flex flex-col h-full">
       <div className="text-2xl font-bold mb-8 text-sidebar-primary-foreground">Dyad OPME</div>
@@ -54,6 +62,16 @@ const Sidebar = () => {
           ))}
         </ul>
       </nav>
+      <div className="mt-auto pt-4 border-t border-sidebar-border">
+        <Button
+          variant="ghost"
+          className="w-full justify-start flex items-center gap-3 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          onClick={handleLogout}
+        >
+          <LogOut className="h-5 w-5" />
+          Sair
+        </Button>
+      </div>
     </aside>
   );
 };

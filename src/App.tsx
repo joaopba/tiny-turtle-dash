@@ -11,7 +11,7 @@ import LinkedOpmeView from "./pages/LinkedOpmeView";
 import Login from "./pages/Login";
 import { SessionContextProvider } from "./components/SessionContextProvider";
 import Layout from "./components/Layout";
-import ProtectedRoute from "./components/ProtectedRoute"; // Importa o novo componente
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -23,9 +23,12 @@ const App = () => (
       <BrowserRouter>
         <SessionContextProvider>
           <Routes>
+            {/* Rota de Login - acessível sem autenticação */}
             <Route path="/login" element={<Login />} />
-            {/* Rotas protegidas são aninhadas dentro de ProtectedRoute */}
+
+            {/* Rotas Protegidas - exigem autenticação */}
             <Route element={<ProtectedRoute />}>
+              {/* O Layout envolve todas as páginas protegidas */}
               <Route element={<Layout />}>
                 <Route path="/" element={<Index />} />
                 <Route path="/opme-scanner" element={<OpmeScanner />} />
@@ -33,7 +36,8 @@ const App = () => (
                 <Route path="/linked-opme-view" element={<LinkedOpmeView />} />
               </Route>
             </Route>
-            {/* Todas as rotas personalizadas devem vir antes da rota catch-all "*" */}
+
+            {/* Rota Catch-all para páginas não encontradas */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </SessionContextProvider>
