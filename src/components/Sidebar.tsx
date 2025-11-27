@@ -3,7 +3,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Package, Scan, Home } from "lucide-react";
+import { Package, Scan, Home, History } from "lucide-react"; // Added History icon
 
 const Sidebar = () => {
   const location = useLocation();
@@ -23,6 +23,11 @@ const Sidebar = () => {
       name: "Cadastro de OPME",
       href: "/opme-registration",
       icon: Package,
+    },
+    {
+      name: "Visualizar Bipagens",
+      href: "/linked-opme-view",
+      icon: History,
     },
   ];
 

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, Scan } from "lucide-react";
+import { CalendarIcon, Scan, Search } from "lucide-react"; // Added Search icon
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,17 +35,6 @@ interface CpsRecord {
   DATARAT: string | null;
   DATA_FECHADO: string;
   DATA_RECEBIMENTO: string | null;
-}
-
-interface LocalCpsRecord {
-  id: string;
-  user_id: string;
-  cps_id: number;
-  patient: string;
-  professional: string;
-  agreement: string;
-  business_unit: string;
-  created_at: string;
 }
 
 interface OpmeItem {
@@ -250,100 +239,92 @@ const OpmeScanner = () => {
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold text-center mb-6">Sistema de Bipagem de OPME</h1>
 
-      {/* CPS Record Fetch */}
+      {/* CPS Record Search and Selection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Scan className="h-5 w-5" /> Buscar Registros de Cirurgia/Procedimento (CPS)
+            <Search className="h-5 w-5" /> Buscar e Selecionar Paciente (CPS)
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="start-date">Data Inicial</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !startDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startDate ? format(startDate, "PPP") : <span>Selecione a data</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={setStartDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="start-date">Data Inicial</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : <span>Selecione a data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={setStartDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-date">Data Final</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP") : <span>Selecione a data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="business-unit">Unidade de Negócio</Label>
+              <Select value={businessUnit} onValueChange={setBusinessUnit}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione a unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="47">Unidade 47</SelectItem>
+                  <SelectItem value="48">Unidade 48</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="end-date">Data Final</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !endDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {endDate ? format(endDate, "PPP") : <span>Selecione a data</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={setEndDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="business-unit">Unidade de Negócio</Label>
-            <Select value={businessUnit} onValueChange={setBusinessUnit}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione a unidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="47">Unidade 47</SelectItem>
-                <SelectItem value="48">Unidade 48</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-3 flex justify-end">
-            <Button onClick={fetchCpsRecords} disabled={loadingCps}>
+          <div className="flex justify-end">
+            <Button onClick={fetchCpsRecords} disabled={loadingCps} className="w-full md:w-auto">
               {loadingCps ? "Buscando..." : "Buscar CPS"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Display CPS Records */}
-      {cpsRecords.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Registros de CPS Encontrados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[300px] w-full rounded-md border">
+          {cpsRecords.length > 0 && (
+            <ScrollArea className="h-[200px] w-full rounded-md border mt-4">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>CPS</TableHead>
                     <TableHead>Paciente</TableHead>
                     <TableHead>Profissional</TableHead>
-                    <TableHead>Convênio</TableHead>
-                    <TableHead>Unidade</TableHead>
                     <TableHead>Ação</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -356,8 +337,6 @@ const OpmeScanner = () => {
                       <TableCell>{record.CPS}</TableCell>
                       <TableCell>{record.PATIENT}</TableCell>
                       <TableCell>{record.PROFESSIONAL}</TableCell>
-                      <TableCell>{record.AGREEMENT}</TableCell>
-                      <TableCell>{record.UNIDADENEGOCIO}</TableCell>
                       <TableCell>
                         <Button
                           variant="outline"
@@ -372,9 +351,9 @@ const OpmeScanner = () => {
                 </TableBody>
               </Table>
             </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* OPME Scanning Section */}
       {selectedCps && (
@@ -395,6 +374,7 @@ const OpmeScanner = () => {
                     handleBarcodeScan();
                   }
                 }}
+                autoFocus // Automatically focus on this input
               />
               <Button onClick={handleBarcodeScan}>Bipar OPME</Button>
             </div>
