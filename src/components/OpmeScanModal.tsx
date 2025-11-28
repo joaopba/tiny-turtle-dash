@@ -5,10 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Scan, Loader2, XCircle } from "lucide-react"; // Adicionado XCircle para o botão de limpar
+import { Scan, Loader2, XCircle, Users } from "lucide-react"; // Adicionado XCircle e Users para o botão de limpar e mudar paciente
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Para a lista de itens bipados
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface OpmeItem {
   id: string;
@@ -41,6 +41,7 @@ interface OpmeScanModalProps {
   opmeInventory: OpmeItem[];
   userId: string | undefined;
   onScanSuccess: () => void;
+  onChangeCps: () => void; // Nova prop para mudar o CPS
 }
 
 const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
@@ -50,17 +51,17 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
   opmeInventory,
   userId,
   onScanSuccess,
+  onChangeCps,
 }) => {
   const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [loadingScan, setLoadingScan] = useState(false);
-  const [currentSessionScans, setCurrentSessionScans] = useState<LinkedOpmeSessionItem[]>([]); // Itens bipados nesta sessão do modal
+  const [currentSessionScans, setCurrentSessionScans] = useState<LinkedOpmeSessionItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setBarcodeInput(""); // Limpa o input ao abrir o modal
+      setBarcodeInput("");
       setCurrentSessionScans([]); // Limpa as bipagens da sessão anterior
-      // Foca no input após um pequeno delay para garantir que o modal esteja totalmente aberto
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
@@ -103,7 +104,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
         .eq("opme_barcode", barcodeInput)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 é "no rows found"
+      if (fetchError && fetchError.code !== 'PGRST116') {
         throw new Error(`Falha ao verificar OPME existente: ${fetchError.message}`);
       }
 
@@ -137,7 +138,6 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
         toast.success(`OPME "${opmeDetails.opme}" bipado para o paciente ${selectedCps.PATIENT}.`);
       }
 
-      // Atualiza a lista de bipagens da sessão atual do modal
       setCurrentSessionScans(prevScans => {
         const existingScanIndex = prevScans.findIndex(item => item.opme_barcode === barcodeInput);
         if (existingScanIndex > -1) {
@@ -149,9 +149,9 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
         }
       });
 
-      setBarcodeInput(""); // Limpa o input após o sucesso
-      onScanSuccess(); // Notifica o componente pai para atualizar a lista de itens bipados
-      inputRef.current?.focus(); // Mantém o foco para continuar bipando
+      setBarcodeInput("");
+      onScanSuccess();
+      inputRef.current?.focus();
     } catch (error: any) {
       console.error("Erro ao bipar OPME:", error.message);
       toast.error(`Erro ao bipar OPME: ${error.message}`);
@@ -215,8 +215,8 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
               </div>
               <ScrollArea className="h-[150px] w-full rounded-md border p-2">
                 <ul className="space-y-2">
-                  {currentSessionScans.map((item, index) => (
-                    <li key={item.opme_barcode + index} className="flex justify-between items-center text-sm bg-muted/30 p-2 rounded-md">
+                  {currentSessionScans.map((item) => (
+                    <li key={item.opme_barcode} className="flex justify-between items-center text-sm bg-muted/30 p-2 rounded-md">
                       <span className="font-medium">{item.opmeDetails?.opme || item.opme_barcode}</span>
                       <span className="text-muted-foreground">Qtd: {item.quantity}</span>
                     </li>
@@ -226,8 +226,11 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        <DialogFooter className="flex sm:justify-between items-center mt-4">
+          <Button variant="outline" onClick={onChangeCps} className="flex items-center gap-2">
+            <Users className="h-4 w-4" /> Mudar Paciente (CPS)
+          </Button>
+          <Button onClick={onClose}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

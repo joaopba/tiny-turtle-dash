@@ -18,7 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import OpmeScanModal from "@/components/OpmeScanModal"; // Importar o novo modal
+import OpmeScanModal from "@/components/OpmeScanModal";
+import CpsSelectionModal from "@/components/CpsSelectionModal"; // Importar o novo modal de seleção de CPS
 
 interface CpsRecord {
   CREATED_AT: string;
@@ -74,9 +75,9 @@ const OpmeScanner = () => {
   const [selectedCps, setSelectedCps] = useState<CpsRecord | null>(null);
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
-  const [cpsSearchInput, setCpsSearchInput] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("bipar");
-  const [isScanModalOpen, setIsScanModalOpen] = useState(false); // Estado para controlar o modal
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isCpsSelectionModalOpen, setIsCpsSelectionModalOpen] = useState(false); // Novo estado para o modal de seleção de CPS
 
   useEffect(() => {
     if (!userId) {
@@ -127,6 +128,37 @@ const OpmeScanner = () => {
     }
   }, [userId, selectedCps, opmeInventory]);
 
+  const handleSelectCps = useCallback(async (record: CpsRecord) => {
+    setSelectedCps(record);
+    setActiveTab("bipar");
+    setIsCpsSelectionModalOpen(false); // Fecha o modal de seleção de CPS
+    setIsScanModalOpen(true); // Abre o modal de bipagem
+    if (!userId) {
+      toast.error("Você precisa estar logado para selecionar um CPS.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('local_cps_records')
+      .upsert({
+        user_id: userId,
+        cps_id: record.CPS,
+        patient: record.PATIENT,
+        professional: record.PROFESSIONAL,
+        agreement: record.AGREEMENT,
+        business_unit: record.UNIDADENEGOCIO,
+        created_at: record.CREATED_AT,
+      }, { onConflict: 'cps_id, user_id' })
+      .select();
+
+    if (error) {
+      console.error("Erro ao salvar CPS localmente:", error);
+      toast.error("Falha ao salvar detalhes do CPS localmente.");
+    } else {
+      console.log("CPS salvo/atualizado localmente:", data);
+    }
+  }, [userId]);
+
   const fetchCpsRecords = useCallback(async (forceApiFetch = false, specificCpsId?: number, fetchAllLocal = false) => {
     if (!userId) {
       toast.error("ID do usuário não disponível para buscar registros de CPS.");
@@ -135,7 +167,7 @@ const OpmeScanner = () => {
 
     setLoadingCps(true);
     setCpsRecords([]);
-    setSelectedCps(null);
+    // setSelectedCps(null); // Não resetar selectedCps aqui para não fechar o modal de bipagem se já estiver aberto
 
     const formattedStartDate = startDate ? format(startDate, "yyyy-MM-dd") : '';
     const formattedEndDate = endDate ? format(endDate, "yyyy-MM-dd") : '';
@@ -148,7 +180,7 @@ const OpmeScanner = () => {
           .from('local_cps_records')
           .select('*')
           .eq('user_id', userId)
-          .order('created_at', { ascending: false }); // Ordenar para melhor visualização
+          .order('created_at', { ascending: false });
 
         if (localError) {
           console.error("Erro ao buscar TODOS registros de CPS locais:", localError);
@@ -168,11 +200,9 @@ const OpmeScanner = () => {
         setCpsRecords(recordsToProcess);
         toast.success(`Foram encontrados ${recordsToProcess.length} registros de CPS locais.`);
         setLoadingCps(false);
-        return; // Sai da função após buscar todos os locais
+        return;
       }
 
-      // Lógica existente para busca por período ou CPS específico
-      // 1. Tentar buscar do banco de dados local primeiro (com filtros)
       let query = supabase
         .from('local_cps_records')
         .select('*')
@@ -207,7 +237,6 @@ const OpmeScanner = () => {
         toast.success(`Foram encontrados ${recordsToProcess.length} registros de CPS locais.`);
       }
 
-      // 2. Se não houver dados locais (com filtros) ou se for forçado, buscar da API externa
       if (specificCpsId && (!recordsToProcess.find(r => r.CPS === specificCpsId) || forceApiFetch)) {
         const apiStartDate = formattedStartDate || format(new Date(), "yyyy-MM-dd");
         const apiEndDate = formattedEndDate || format(new Date(), "yyyy-MM-dd");
@@ -292,6 +321,90 @@ const OpmeScanner = () => {
     }
   }, [startDate, endDate, businessUnit, userId]);
 
+  const handleCpsSearch = useCallback(async (cpsIdToSearch: string) => {
+    const parsedCpsId = parseInt(cpsIdToSearch, 10);
+    if (isNaN(parsedCpsId)) {
+      toast.error("Número de CPS inválido.");
+      return;
+    }
+
+    setLoadingCps(true);
+    try {
+      // Tenta buscar no banco de dados local primeiro
+      let { data: localCps, error: localError } = await supabase
+        .from('local_cps_records')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('cps_id', parsedCpsId)
+        .single();
+
+      if (localError && localError.code !== 'PGRST116') { // PGRST116 é "no rows found"
+        console.error("Erro ao buscar CPS localmente:", localError);
+        // Continua para a API externa se houver erro diferente de "não encontrado"
+      }
+
+      if (localCps) {
+        handleSelectCps({
+          CPS: localCps.cps_id,
+          PATIENT: localCps.patient,
+          PROFESSIONAL: localCps.professional,
+          AGREEMENT: localCps.agreement,
+          UNIDADENEGOCIO: localCps.business_unit,
+          CREATED_AT: localCps.created_at,
+          TIPO: '', SITUACAO: '', ATENDANT: '', TREATMENT: null, REGISTRATION: null, A_CID: '', DATA_ALTA: null, DATAENTREGA: null, DATARAT: null, DATA_FECHADO: '', DATA_RECEBIMENTO: null,
+        });
+        toast.success(`CPS ${parsedCpsId} encontrado e selecionado.`);
+      } else {
+        // Se não encontrado localmente, busca na API externa
+        const apiStartDate = format(new Date(), "yyyy-MM-dd"); // Usar data atual como fallback
+        const apiEndDate = format(new Date(), "yyyy-MM-dd");
+
+        const { data, error } = await supabase.functions.invoke('fetch-cps-records', {
+          body: {
+            start_date: apiStartDate,
+            end_date: apiEndDate,
+            business_unit: businessUnit, // Usar a unidade de negócio padrão ou selecionada
+          },
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (data && Array.isArray(data)) {
+          const foundInApi = data.find((record: CpsRecord) => record.CPS === parsedCpsId);
+          if (foundInApi) {
+            handleSelectCps(foundInApi);
+            toast.success(`CPS ${parsedCpsId} encontrado na API externa e selecionado.`);
+
+            // Salva na base de dados local após encontrar na API externa
+            await supabase
+              .from('local_cps_records')
+              .upsert({
+                user_id: userId,
+                cps_id: foundInApi.CPS,
+                patient: foundInApi.PATIENT,
+                professional: foundInApi.PROFESSIONAL,
+                agreement: foundInApi.AGREEMENT,
+                business_unit: foundInApi.UNIDADENEGOCIO,
+                created_at: foundInApi.CREATED_AT,
+              }, { onConflict: 'cps_id, user_id' });
+          } else {
+            toast.error(`CPS ${parsedCpsId} não encontrado na API externa para o período.`);
+          }
+        } else {
+          toast.warning("Nenhum registro de CPS externo encontrado ou formato de dados inesperado.");
+        }
+      }
+    } catch (error: any) {
+      console.error("Erro ao buscar registros de CPS:", error.message);
+      toast.error(`Falha ao buscar registros de CPS: ${error.message}. Verifique a conexão ou os parâmetros.`);
+    } finally {
+      setLoadingCps(false);
+    }
+  }, [userId, handleSelectCps, businessUnit]);
+
+
   useEffect(() => {
     fetchOpmeInventory();
   }, [fetchOpmeInventory]);
@@ -314,124 +427,37 @@ const OpmeScanner = () => {
   useEffect(() => {
     const cpsIdFromUrl = searchParams.get('cps_id');
     if (cpsIdFromUrl && userId) {
-      setCpsSearchInput(cpsIdFromUrl);
+      // Se houver CPS na URL, tenta selecioná-lo e abre o modal de bipagem
       handleCpsSearch(cpsIdFromUrl);
-      setSearchParams({});
+      setSearchParams({}); // Limpa o parâmetro da URL
+    } else if (userId && !selectedCps && !isScanModalOpen) {
+      // Se não houver CPS selecionado e o modal de bipagem não estiver aberto, abre o modal de seleção de CPS
+      setIsCpsSelectionModalOpen(true);
     }
-  }, [searchParams, userId, setSearchParams]);
+  }, [searchParams, userId, selectedCps, isScanModalOpen, handleCpsSearch, setSearchParams]);
 
   useEffect(() => {
     fetchLinkedOpme();
   }, [selectedCps, fetchLinkedOpme]);
 
-  const handleSelectCps = useCallback(async (record: CpsRecord) => {
-    setSelectedCps(record);
-    setActiveTab("bipar");
-    if (!userId) {
-      toast.error("Você precisa estar logado para selecionar um CPS.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('local_cps_records')
-      .upsert({
-        user_id: userId,
-        cps_id: record.CPS,
-        patient: record.PATIENT,
-        professional: record.PROFESSIONAL,
-        agreement: record.AGREEMENT,
-        business_unit: record.UNIDADENEGOCIO,
-        created_at: record.CREATED_AT,
-      }, { onConflict: 'cps_id, user_id' })
-      .select();
-
-    if (error) {
-      console.error("Erro ao salvar CPS localmente:", error);
-      toast.error("Falha ao salvar detalhes do CPS localmente.");
-    } else {
-      console.log("CPS salvo/atualizado localmente:", data);
-    }
-  }, [userId]);
-
-  const handleCpsSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCpsSearchInput(e.target.value);
+  const handleChangeCps = () => {
+    setIsScanModalOpen(false); // Fecha o modal de bipagem
+    setSelectedCps(null); // Limpa o CPS selecionado
+    setIsCpsSelectionModalOpen(true); // Abre o modal de seleção de CPS
   };
 
-  const handleCpsSearch = useCallback(async (cpsIdToSearch?: string) => {
-    const searchId = cpsIdToSearch || cpsSearchInput;
-    if (!searchId) {
-      toast.warning("Por favor, insira um número de CPS para buscar.");
-      return;
-    }
-
-    const parsedCpsId = parseInt(searchId, 10);
-    if (isNaN(parsedCpsId)) {
-      toast.error("Número de CPS inválido.");
-      return;
-    }
-
-    const foundCps = cpsRecords.find(record => record.CPS === parsedCpsId);
-    if (foundCps) {
-      handleSelectCps(foundCps);
-      toast.success(`CPS ${foundCps.CPS} encontrado e selecionado.`);
-    } else {
-      await fetchCpsRecords(true, parsedCpsId);
-      const updatedCpsRecords = await supabase
-        .from('local_cps_records')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('cps_id', parsedCpsId)
-        .single();
-
-      if (updatedCpsRecords.data) {
-        handleSelectCps({
-          CPS: updatedCpsRecords.data.cps_id,
-          PATIENT: updatedCpsRecords.data.patient,
-          PROFESSIONAL: updatedCpsRecords.data.professional,
-          AGREEMENT: updatedCpsRecords.data.agreement,
-          UNIDADENEGOCIO: updatedCpsRecords.data.business_unit,
-          CREATED_AT: updatedCpsRecords.data.created_at,
-          TIPO: '', SITUACAO: '', ATENDANT: '', TREATMENT: null, REGISTRATION: null, A_CID: '', DATA_ALTA: null, DATAENTREGA: null, DATARAT: null, DATA_FECHADO: '', DATA_RECEBIMENTO: null,
-        });
-        toast.success(`CPS ${parsedCpsId} encontrado e selecionado.`);
-      } else {
-        toast.error(`CPS ${parsedCpsId} não encontrado. Tente buscar por período.`);
-      }
-    }
-  }, [cpsSearchInput, cpsRecords, fetchCpsRecords, handleSelectCps, userId]);
-
+  if (loadingCps && !selectedCps) { // Mostrar spinner apenas se estiver carregando e nenhum CPS estiver selecionado
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">Carregando...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       <h1 className="text-4xl font-extrabold text-center text-foreground mb-8">Bipagem de OPME</h1>
-
-      {/* Busca Direta de CPS */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
-            <Search className="h-6 w-6 text-primary" /> Buscar CPS por Número
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="Digite o número do CPS"
-              value={cpsSearchInput}
-              onChange={handleCpsSearchInputChange}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleCpsSearch();
-                }
-              }}
-              className="flex-1"
-            />
-            <Button onClick={() => handleCpsSearch()} className="w-full sm:w-auto">Buscar CPS</Button>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Use este campo para selecionar um CPS diretamente.
-          </p>
-        </CardContent>
-      </Card>
 
       {/* CPS Record Search and Selection by Period */}
       <Card className="shadow-lg">
@@ -633,6 +659,14 @@ const OpmeScanner = () => {
         </Card>
       )}
 
+      {/* O Modal de Seleção de CPS */}
+      <CpsSelectionModal
+        isOpen={isCpsSelectionModalOpen}
+        onClose={() => setIsCpsSelectionModalOpen(false)}
+        onCpsSelected={handleCpsSearch}
+        loading={loadingCps}
+      />
+
       {/* O Modal de Bipagem */}
       {selectedCps && (
         <OpmeScanModal
@@ -641,7 +675,8 @@ const OpmeScanner = () => {
           selectedCps={selectedCps}
           opmeInventory={opmeInventory}
           userId={userId}
-          onScanSuccess={fetchLinkedOpme} // Atualiza a lista de bipagens após o sucesso
+          onScanSuccess={fetchLinkedOpme}
+          onChangeCps={handleChangeCps} // Passa a função para mudar o CPS
         />
       )}
     </div>
