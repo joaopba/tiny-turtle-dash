@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle } from "lucide-react";
+import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -162,12 +162,19 @@ const OpmeRegistration = () => {
             <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center text-center">
               <h3 className="font-semibold text-lg mb-2">Importar Inventário (CSV)</h3>
               <p className="text-sm text-muted-foreground mb-4">O arquivo deve conter as colunas: opme, lote, validade, referencia, anvisa, tuss, cod_simpro, codigo_barras.</p>
-              <Button asChild variant="outline">
-                <Label htmlFor="csv-upload" className="cursor-pointer">
-                  {loadingFileUpload ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                  {loadingFileUpload ? "Processando..." : "Selecionar Arquivo"}
-                </Label>
-              </Button>
+              <div className="flex gap-2">
+                <Button asChild variant="outline">
+                  <Label htmlFor="csv-upload" className="cursor-pointer">
+                    {loadingFileUpload ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                    {loadingFileUpload ? "Processando..." : "Selecionar Arquivo"}
+                  </Label>
+                </Button>
+                <Button asChild variant="secondary">
+                  <a href="/exemplo-opme.csv" download>
+                    <Download className="h-4 w-4 mr-2" /> Baixar Exemplo
+                  </a>
+                </Button>
+              </div>
               <Input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} disabled={loadingFileUpload} />
             </div>
             <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center text-center">
@@ -187,7 +194,22 @@ const OpmeRegistration = () => {
           </div>
           <div>
             <h3 className="text-xl font-semibold mb-4">Inventário Atual</h3>
-            {loadingInventory ? <div className="flex items-center justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : <ScrollArea className="h-[300px] w-full rounded-md border"><Table>{/* ... Table content ... */}</Table></ScrollArea>}
+            {loadingInventory ? <div className="flex items-center justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : 
+            <ScrollArea className="h-[300px] w-full rounded-md border">
+              <Table>
+                <TableHeader><TableRow><TableHead>OPME</TableHead><TableHead>Lote</TableHead><TableHead>Validade</TableHead><TableHead>Cód. Barras</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {opmeInventory.map(item => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.opme}</TableCell>
+                      <TableCell>{item.lote}</TableCell>
+                      <TableCell>{item.validade}</TableCell>
+                      <TableCell>{item.codigo_barras}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>}
           </div>
         </CardContent>
       </Card>

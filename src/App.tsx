@@ -12,9 +12,11 @@ import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import { SessionContextProvider } from "./components/SessionContextProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import { ThemeProvider } from "next-themes";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Account from "./pages/Account"; // Importar a nova página
+import Account from "./pages/Account";
+import UserManagement from "./pages/UserManagement"; // Importar a nova página
 
 const queryClient = new QueryClient();
 
@@ -31,9 +33,14 @@ const App = () => (
               <Route element={<Layout />}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/opme-scanner" element={<OpmeScanner />} />
-                <Route path="/opme-registration" element={<OpmeRegistration />} />
                 <Route path="/linked-opme-view" element={<LinkedOpmeView />} />
-                <Route path="/account" element={<Account />} /> {/* Adicionar a nova rota */}
+                <Route path="/account" element={<Account />} />
+                
+                {/* Rotas exclusivas para Gestores */}
+                <Route element={<RoleProtectedRoute allowedRoles={['GESTOR']} />}>
+                  <Route path="/opme-registration" element={<OpmeRegistration />} />
+                  <Route path="/user-management" element={<UserManagement />} />
+                </Route>
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

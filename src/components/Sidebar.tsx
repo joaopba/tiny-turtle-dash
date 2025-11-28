@@ -3,40 +3,27 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Package, Scan, History, LogOut, LayoutDashboard } from "lucide-react";
+import { Package, Scan, History, LogOut, LayoutDashboard, Users } from "lucide-react";
 import { useSession } from "./SessionContextProvider";
 import { Button } from "./ui/button";
 
 const navItems = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Bipagem de OPME",
-    href: "/opme-scanner",
-    icon: Scan,
-  },
-  {
-    name: "Cadastro de OPME",
-    href: "/opme-registration",
-    icon: Package,
-  },
-  {
-    name: "Visualizar Bipagens",
-    href: "/linked-opme-view",
-    icon: History,
-  },
+  { name: "Dashboard", href: "/", icon: LayoutDashboard, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Bipagem de OPME", href: "/opme-scanner", icon: Scan, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Visualizar Bipagens", href: "/linked-opme-view", icon: History, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Cadastro de OPME", href: "/opme-registration", icon: Package, roles: ['GESTOR'] },
+  { name: "Gerenciar Usuários", href: "/user-management", icon: Users, roles: ['GESTOR'] },
 ];
 
 const Sidebar = () => {
   const location = useLocation();
-  const { supabase } = useSession();
+  const { supabase, profile } = useSession();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  const userRole = profile?.role || 'OPERADOR';
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border p-4">
@@ -45,7 +32,7 @@ const Sidebar = () => {
       </div>
       <nav className="flex-1">
         <ul className="space-y-2">
-          {navItems.map((item) => (
+          {navItems.filter(item => item.roles.includes(userRole)).map((item) => (
             <li key={item.href}>
               <Link
                 to={item.href}

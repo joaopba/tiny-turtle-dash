@@ -8,6 +8,7 @@ interface Profile {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  role: 'GESTOR' | 'OPERADOR' | null;
 }
 
 interface SessionContextType {
@@ -15,7 +16,7 @@ interface SessionContextType {
   user: User | null;
   profile: Profile | null;
   supabase: SupabaseClient;
-  loading: boolean; // Adicionado estado de carregamento
+  loading: boolean;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -31,7 +32,7 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false); // Carregamento inicial concluído
+      // O setLoading será false após o perfil ser buscado no próximo useEffect
     };
 
     getInitialSession();
@@ -53,7 +54,7 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
       if (user) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('first_name, last_name, avatar_url')
+          .select('first_name, last_name, avatar_url, role')
           .eq('id', user.id)
           .single();
 
@@ -66,6 +67,7 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
       } else {
         setProfile(null);
       }
+      setLoading(false); // Marca o carregamento como concluído aqui
     };
 
     fetchProfile();

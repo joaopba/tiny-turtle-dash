@@ -25,6 +25,7 @@ function Login() {
         <Auth
           supabaseClient={supabase}
           providers={[]}
+          view="sign_in"
           localization={{
             variables: {
               sign_in: {
@@ -35,17 +36,6 @@ function Login() {
                 button_label: 'Entrar',
                 loading_button_label: 'Entrando...',
                 social_provider_text: 'Entrar com {{provider}}',
-                link_text: 'Já tem uma conta? Entre',
-              },
-              sign_up: {
-                email_label: 'Seu endereço de e-mail',
-                password_label: 'Crie uma senha',
-                email_input_placeholder: 'seu@email.com',
-                password_input_placeholder: '••••••••',
-                button_label: 'Cadastrar',
-                loading_button_label: 'Cadastrando...',
-                social_provider_text: 'Cadastrar com {{provider}}',
-                link_text: 'Não tem uma conta? Cadastre-se',
               },
               forgotten_password: {
                 email_label: 'Seu endereço de e-mail',

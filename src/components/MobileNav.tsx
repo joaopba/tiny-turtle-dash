@@ -2,44 +2,31 @@
 
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, Package, Scan, History, LogOut, LayoutDashboard } from "lucide-react";
+import { Menu, Package, Scan, History, LogOut, LayoutDashboard, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useSession } from "./SessionContextProvider";
 
 const navItems = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Bipagem de OPME",
-    href: "/opme-scanner",
-    icon: Scan,
-  },
-  {
-    name: "Cadastro de OPME",
-    href: "/opme-registration",
-    icon: Package,
-  },
-  {
-    name: "Visualizar Bipagens",
-    href: "/linked-opme-view",
-    icon: History,
-  },
+  { name: "Dashboard", href: "/", icon: LayoutDashboard, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Bipagem de OPME", href: "/opme-scanner", icon: Scan, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Visualizar Bipagens", href: "/linked-opme-view", icon: History, roles: ['GESTOR', 'OPERADOR'] },
+  { name: "Cadastro de OPME", href: "/opme-registration", icon: Package, roles: ['GESTOR'] },
+  { name: "Gerenciar Usuários", href: "/user-management", icon: Users, roles: ['GESTOR'] },
 ];
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
-  const { supabase } = useSession();
+  const { supabase, profile } = useSession();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setOpen(false); // Fecha o menu após o logout
+    setOpen(false);
   };
+
+  const userRole = profile?.role || 'OPERADOR';
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -59,7 +46,7 @@ export function MobileNav() {
         </div>
         <nav className="flex-1">
           <ul className="space-y-2">
-            {navItems.map((item) => (
+            {navItems.filter(item => item.roles.includes(userRole)).map((item) => (
               <li key={item.href}>
                 <Link
                   to={item.href}
@@ -69,7 +56,7 @@ export function MobileNav() {
                       ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   )}
-                  onClick={() => setOpen(false)} // Fecha o menu ao clicar em um item
+                  onClick={() => setOpen(false)}
                 >
                   <item.icon className="h-5 w-5" />
                   {item.name}
