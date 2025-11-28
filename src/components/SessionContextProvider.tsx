@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import LoadingSpinner from './LoadingSpinner';
 
 interface Profile {
   first_name: string | null;
@@ -16,6 +15,7 @@ interface SessionContextType {
   user: User | null;
   profile: Profile | null;
   supabase: SupabaseClient;
+  loading: boolean; // Adicionado estado de carregamento
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -27,55 +27,19 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSessionAndProfile = async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error("Error getting session:", sessionError);
-        setLoading(false);
-        return;
-      }
-
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, avatar_url')
-          .eq('id', session.user.id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching profile:", error.message);
-        } else {
-          setProfile(data);
-        }
-      }
-      setLoading(false);
+      setLoading(false); // Carregamento inicial concluído
     };
 
-    fetchSessionAndProfile();
+    getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
+      (_event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('first_name, last_name, avatar_url')
-            .eq('id', currentSession.user.id)
-            .single();
-          if (error) {
-            console.error("Error fetching profile on auth change:", error.message);
-            setProfile(null);
-          } else {
-            setProfile(data);
-          }
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
       }
     );
 
@@ -84,12 +48,31 @@ export const SessionContextProvider = ({ children }: { children: React.ReactNode
     };
   }, []);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching profile:", error.message);
+          setProfile(null);
+        } else {
+          setProfile(data);
+        }
+      } else {
+        setProfile(null);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   return (
-    <SessionContext.Provider value={{ session, user, profile, supabase }}>
+    <SessionContext.Provider value={{ session, user, profile, supabase, loading }}>
       {children}
     </SessionContext.Provider>
   );
