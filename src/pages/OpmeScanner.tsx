@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import OpmeScanModal from "@/components/OpmeScanModal"; // Importar o novo modal
 
 interface CpsRecord {
   CREATED_AT: string;
@@ -72,10 +73,10 @@ const OpmeScanner = () => {
   const [loadingCps, setLoadingCps] = useState(false);
   const [selectedCps, setSelectedCps] = useState<CpsRecord | null>(null);
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
-  const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
   const [cpsSearchInput, setCpsSearchInput] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("bipar");
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false); // Estado para controlar o modal
 
   useEffect(() => {
     if (!userId) {
@@ -322,80 +323,6 @@ const OpmeScanner = () => {
     }
   }, [userId]);
 
-  const handleBarcodeScan = async () => {
-    if (!selectedCps) {
-      toast.error("Por favor, selecione um paciente (CPS) primeiro.");
-      return;
-    }
-    if (!barcodeInput) {
-      toast.error("Por favor, insira um código de barras.");
-      return;
-    }
-    if (!userId) {
-      toast.error("Você precisa estar logado para bipar OPME.");
-      return;
-    }
-
-    const opmeExists = opmeInventory.some(
-      (item) => item.codigo_barras === barcodeInput
-    );
-
-    if (!opmeExists) {
-      toast.error("Código de barras não encontrado no inventário OPME.");
-      return;
-    }
-
-    const { data: existingLinkedItem, error: fetchError } = await supabase
-      .from("linked_opme")
-      .select("id, quantity")
-      .eq("user_id", userId)
-      .eq("cps_id", selectedCps.CPS)
-      .eq("opme_barcode", barcodeInput)
-      .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error("Erro ao verificar OPME existente:", fetchError);
-      toast.error(`Falha ao verificar OPME: ${fetchError.message}`);
-      return;
-    }
-
-    if (existingLinkedItem) {
-      const newQuantity = existingLinkedItem.quantity + 1;
-      const { error: updateError } = await supabase
-        .from("linked_opme")
-        .update({ quantity: newQuantity })
-        .eq("id", existingLinkedItem.id);
-
-      if (updateError) {
-        console.error("Erro ao incrementar quantidade do OPME:", updateError);
-        toast.error(`Falha ao incrementar quantidade: ${updateError.message}`);
-        return;
-      }
-      toast.success(`Quantidade do OPME ${barcodeInput} para o paciente ${selectedCps.PATIENT} incrementada para ${newQuantity}.`);
-    } else {
-      const newLinkedItem = {
-        cps_id: selectedCps.CPS,
-        opme_barcode: barcodeInput,
-        user_id: userId,
-        quantity: 1,
-      };
-
-      const { error: insertError } = await supabase
-        .from("linked_opme")
-        .insert(newLinkedItem);
-
-      if (insertError) {
-        console.error("Erro ao bipar OPME:", insertError);
-        toast.error(`Falha ao bipar OPME: ${insertError.message}`);
-        return;
-      }
-      toast.success(`OPME com código ${barcodeInput} bipado para o paciente ${selectedCps.PATIENT}.`);
-    }
-
-    setBarcodeInput("");
-    fetchLinkedOpme();
-  };
-
   const handleCpsSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCpsSearchInput(e.target.value);
   };
@@ -617,23 +544,15 @@ const OpmeScanner = () => {
                 <TabsTrigger value="itens-bipados" className="text-base">Itens Bipados</TabsTrigger>
               </TabsList>
               <TabsContent value="bipar" className="mt-6 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Input
-                    placeholder="Código de Barras do OPME"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        handleBarcodeScan();
-                      }
-                    }}
-                    autoFocus
-                    className="flex-1 p-2 text-lg"
-                  />
-                  <Button onClick={handleBarcodeScan} className="w-full sm:w-auto text-lg py-6">Bipar OPME</Button>
-                </div>
+                <Button
+                  onClick={() => setIsScanModalOpen(true)}
+                  className="w-full text-lg py-6"
+                  disabled={!selectedCps}
+                >
+                  <Scan className="h-5 w-5 mr-2" /> Abrir Bipagem de OPME
+                </Button>
                 <p className="text-sm text-muted-foreground">
-                  Digite ou escaneie o código de barras do OPME. Se o item já foi bipado, a quantidade será incrementada.
+                  Clique para abrir o modal de bipagem e registrar OPMEs para o paciente selecionado.
                 </p>
               </TabsContent>
               <TabsContent value="itens-bipados" className="mt-6 space-y-4">
@@ -673,12 +592,24 @@ const OpmeScanner = () => {
                     </Table>
                   </ScrollArea>
                 ) : (
-                  <p className="text-muted-foreground text-center py-4">Nenhum OPME bipado para este paciente ainda.</p>
+                  <p className="text-muted-foreground text-sm text-center py-4">Nenhum OPME bipado para este paciente ainda.</p>
                 )}
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
+      )}
+
+      {/* O Modal de Bipagem */}
+      {selectedCps && (
+        <OpmeScanModal
+          isOpen={isScanModalOpen}
+          onClose={() => setIsScanModalOpen(false)}
+          selectedCps={selectedCps}
+          opmeInventory={opmeInventory}
+          userId={userId}
+          onScanSuccess={fetchLinkedOpme} // Atualiza a lista de bipagens após o sucesso
+        />
       )}
     </div>
   );
