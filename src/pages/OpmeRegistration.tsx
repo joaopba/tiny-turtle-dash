@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
+import * as XLSX from 'xlsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,27 +71,64 @@ const OpmeRegistration = () => {
     fetchRestrictions();
   }, [fetchOpmeInventory, fetchRestrictions]);
 
+  const processAndUploadData = async (data: any[]) => {
+    if (!userId) return;
+    const opmesToInsert = data.map((row: any) => ({
+      opme: row.opme,
+      lote: row.lote,
+      validade: row.validade,
+      referencia: row.referencia,
+      anvisa: row.anvisa,
+      tuss: row.tuss,
+      cod_simpro: row.cod_simpro,
+      codigo_barras: row.codigo_barras,
+      user_id: userId,
+    }));
+
+    const { error } = await supabase.from("opme_inventory").upsert(opmesToInsert, { onConflict: 'codigo_barras, user_id' });
+    if (error) {
+      toast.error(`Falha no upload: ${error.message}`);
+    } else {
+      toast.success(`${opmesToInsert.length} OPMEs importados/atualizados com sucesso!`);
+      fetchOpmeInventory();
+    }
+    setLoadingFileUpload(false);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !userId) return;
     setLoadingFileUpload(true);
-    Papa.parse(event.target.files[0], {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const opmesToInsert = results.data.map((row: any) => ({ ...row, user_id: userId }));
-        const { error } = await supabase.from("opme_inventory").upsert(opmesToInsert, { onConflict: 'codigo_barras, user_id' });
-        if (error) toast.error(`Falha no upload: ${error.message}`);
-        else {
-          toast.success(`${opmesToInsert.length} OPMEs importados/atualizados com sucesso!`);
-          fetchOpmeInventory();
-        }
-        setLoadingFileUpload(false);
-      },
-      error: (error) => {
-        toast.error(`Erro ao processar arquivo: ${error.message}`);
-        setLoadingFileUpload(false);
-      },
-    });
+    const file = event.target.files[0];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const reader = new FileReader();
+
+    if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      reader.readAsArrayBuffer(file);
+      reader.onload = (e) => {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+        processAndUploadData(json);
+      };
+    } else if (fileExtension === 'csv') {
+      reader.readAsText(file);
+      reader.onload = (e) => {
+        Papa.parse(e.target?.result as string, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => processAndUploadData(results.data),
+          error: (error) => {
+            toast.error(`Erro ao processar CSV: ${error.message}`);
+            setLoadingFileUpload(false);
+          },
+        });
+      };
+    } else {
+      toast.error("Formato de arquivo não suportado. Use .xlsx, .xls ou .csv");
+      setLoadingFileUpload(false);
+    }
   };
 
   const handleAddOpme = async () => {
@@ -161,27 +199,27 @@ const OpmeRegistration = () => {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-3 text-2xl font-semibold"><Package className="h-6 w-6 text-primary" /> Gerenciamento de Inventário</CardTitle>
-          <CardDescription>Adicione OPMEs individualmente, em massa via arquivo CSV, ou visualize seu inventário atual.</CardDescription>
+          <CardDescription>Adicione OPMEs individualmente, em massa via arquivo Excel ou CSV, ou visualize seu inventário atual.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center text-center">
-              <h3 className="font-semibold text-lg mb-2">Importar Inventário (CSV)</h3>
-              <p className="text-sm text-muted-foreground mb-4">O arquivo deve conter as colunas: opme, lote, validade, referencia, anvisa, tuss, cod_simpro, codigo_barras.</p>
+              <h3 className="font-semibold text-lg mb-2">Importar Inventário (Excel/CSV)</h3>
+              <p className="text-sm text-muted-foreground mb-4">O arquivo (CSV ou Excel) deve conter as colunas: opme, lote, validade, referencia, anvisa, tuss, cod_simpro, codigo_barras.</p>
               <div className="flex gap-2">
                 <Button asChild variant="outline">
-                  <Label htmlFor="csv-upload" className="cursor-pointer">
+                  <Label htmlFor="file-upload" className="cursor-pointer">
                     {loadingFileUpload ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                     {loadingFileUpload ? "Processando..." : "Selecionar Arquivo"}
                   </Label>
                 </Button>
                 <Button asChild variant="secondary">
-                  <a href="/exemplo-opme.csv" download>
+                  <a href="/exemplo-opme.xlsx" download>
                     <Download className="h-4 w-4 mr-2" /> Baixar Exemplo
                   </a>
                 </Button>
               </div>
-              <Input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} disabled={loadingFileUpload} />
+              <Input id="file-upload" type="file" accept=".csv, .xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" className="hidden" onChange={handleFileUpload} disabled={loadingFileUpload} />
             </div>
             <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center text-center">
               <h3 className="font-semibold text-lg mb-2">Adicionar Manualmente</h3>
