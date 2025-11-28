@@ -4,10 +4,10 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 30% 98%; /* Light gray background for overall app */
+    --foreground: 222.2 84% 4.9%; /* Dark text */
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100%; /* White cards */
     --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
@@ -34,21 +34,21 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%; /* Light background */
-    --sidebar-foreground: 240 5.3% 26.1%; /* Darker text */
+    --sidebar-background: 222.2 84% 4.9%; /* Dark background for sidebar */
+    --sidebar-foreground: 210 40% 98%; /* Light text for sidebar */
     --sidebar-primary: 203 100% 37%; /* Primary blue for active item */
-    --sidebar-primary-foreground: 0 0% 98%; /* White text for active item */
-    --sidebar-accent: 210 40% 96.1%; /* Light accent for hover */
-    --sidebar-accent-foreground: 222.2 47.4% 11.2%; /* Dark text for hover */
-    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-primary-foreground: 0 0% 100%; /* White text for active item */
+    --sidebar-accent: 217.2 32.6% 17.5%; /* Darker accent for hover */
+    --sidebar-accent-foreground: 210 40% 98%; /* Light text for hover */
+    --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 203 100% 37%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 222.2 84% 4.9%; /* Dark background for overall app */
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 217.2 32.6% 17.5%; /* Darker cards */
     --card-foreground: 210 40% 98%;
 
     --popover: 222.2 84% 4.9%;
@@ -73,13 +73,13 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 203 100% 37%; /* Ring color matches primary */
 
-    --sidebar-background: 240 5.9% 10%; /* Dark background */
-    --sidebar-foreground: 240 4.8% 95.9%; /* Light text */
+    --sidebar-background: 222.2 84% 4.9%; /* Dark background for sidebar */
+    --sidebar-foreground: 210 40% 98%; /* Light text for sidebar */
     --sidebar-primary: 203 100% 37%; /* Primary blue for active item */
     --sidebar-primary-foreground: 0 0% 100%; /* White text for active item */
-    --sidebar-accent: 240 3.7% 15.9%; /* Darker accent for hover */
-    --sidebar-accent-foreground: 240 4.8% 95.9%; /* Light text for hover */
-    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-accent: 217.2 32.6% 17.5%; /* Darker accent for hover */
+    --sidebar-accent-foreground: 210 40% 98%; /* Light text for hover */
+    --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 203 100% 37%;
   }
 }

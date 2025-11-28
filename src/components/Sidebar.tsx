@@ -40,9 +40,9 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border p-4 flex flex-col h-full">
-      <div className="mb-8 flex items-center justify-center">
-        <img src="https://ranucleodeendoscopia.com.br/wp-content/themes/ra-v1/images/logo/logo-grupora-endoscopia.png" alt="Grupo RA Endoscopia Logo" className="h-12 w-auto" />
+    <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border p-4 flex flex-col h-screen sticky top-0">
+      <div className="mb-8 flex items-center justify-center py-4">
+        <img src="https://ranucleodeendoscopia.com.br/wp-content/themes/ra-v1/images/logo/logo-grupora-endoscopia.png" alt="Grupo RA Endoscopia Logo" className="h-14 w-auto" />
       </div>
       <nav className="flex-1">
         <ul className="space-y-2">
@@ -51,10 +51,10 @@ const Sidebar = () => {
               <Link
                 to={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors",
                   location.pathname === item.href
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -67,7 +67,7 @@ const Sidebar = () => {
       <div className="mt-auto pt-4 border-t border-sidebar-border">
         <Button
           variant="ghost"
-          className="w-full justify-start flex items-center gap-3 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="w-full justify-start flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           onClick={handleLogout}
         >
           <LogOut className="h-5 w-5" />

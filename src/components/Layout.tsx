@@ -10,8 +10,8 @@ const Layout = () => {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
-      <main className="flex-1 flex flex-col">
-        <div className="flex-1 p-6">
+      <main className="flex-1 flex flex-col p-6 lg:p-10">
+        <div className="flex-1 max-w-7xl mx-auto w-full">
           <Outlet />
         </div>
         <MadeWithDyad />
