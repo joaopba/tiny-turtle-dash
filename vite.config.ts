@@ -7,7 +7,7 @@ export default defineConfig(() => ({
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: ['ranucleo.chatconquista.com'],
+    allowedHosts: ['ranucleo.chatconquista.com', 'grupora.chatconquista.com'],
     proxy: {
       '/logo-proxy': {
         target: 'https://ranucleodeendoscopia.com.br',
