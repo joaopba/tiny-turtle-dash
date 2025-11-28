@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download, Shuffle } from "lucide-react";
+import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download, Shuffle, Edit, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from 'xlsx';
@@ -16,9 +16,10 @@ import { useSession } from "@/components/SessionContextProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 interface OpmeItem {
-  id: string; opme: string; lote: string; validade: string; referencia: string; anvisa: string; tuss: string; cod_simpro: string; codigo_barras: string;
+  id: string; opme: string; lote: string | null; validade: string | null; referencia: string | null; anvisa: string | null; tuss: string | null; cod_simpro: string | null; codigo_barras: string | null;
 }
 
 interface OpmeRestriction {
@@ -39,10 +40,14 @@ const OpmeRegistration = () => {
   const [opmeInventory, setOpmeInventory] = useState<OpmeItem[]>([]);
   const [restrictions, setRestrictions] = useState<OpmeRestriction[]>([]);
   const [isAddOpmeDialogOpen, setIsAddOpmeDialogOpen] = useState(false);
+  const [isEditOpmeDialogOpen, setIsEditOpmeDialogOpen] = useState(false);
+  const [editingOpme, setEditingOpme] = useState<OpmeItem | null>(null);
+  
   const [loadingInventory, setLoadingInventory] = useState(true);
   const [loadingRestrictions, setLoadingRestrictions] = useState(true);
   const [loadingFileUpload, setLoadingFileUpload] = useState(false);
   const [loadingAddManual, setLoadingAddManual] = useState(false);
+  const [loadingUpdate, setLoadingUpdate] = useState(false);
   const [submittingRestriction, setSubmittingRestriction] = useState(false);
 
   const [newOpme, setNewOpme] = useState<Omit<OpmeItem, 'id'>>({ opme: "", lote: "", validade: "", referencia: "", anvisa: "", tuss: "", cod_simpro: "", codigo_barras: "" });
@@ -73,19 +78,30 @@ const OpmeRegistration = () => {
 
   const processAndUploadData = async (data: any[]) => {
     if (!userId) return;
-    const opmesToInsert = data.map((row: any) => ({
+    const validOpmes = data.filter(row => row.opme);
+    if (validOpmes.length !== data.length) {
+      toast.warning(`${data.length - validOpmes.length} linhas foram ignoradas por não terem o nome do OPME.`);
+    }
+
+    const opmesToInsert = validOpmes.map((row: any) => ({
       opme: row.opme,
-      lote: row.lote,
-      validade: row.validade,
-      referencia: row.referencia,
-      anvisa: row.anvisa,
-      tuss: row.tuss,
-      cod_simpro: row.cod_simpro,
-      codigo_barras: row.codigo_barras,
+      lote: row.lote || null,
+      validade: row.validade || null,
+      referencia: row.referencia || null,
+      anvisa: row.anvisa || null,
+      tuss: row.tuss || null,
+      cod_simpro: row.cod_simpro || null,
+      codigo_barras: row.codigo_barras || null,
       user_id: userId,
     }));
 
-    const { error } = await supabase.from("opme_inventory").upsert(opmesToInsert, { onConflict: 'codigo_barras, user_id' });
+    if (opmesToInsert.length === 0) {
+      toast.error("Nenhum OPME válido para importar.");
+      setLoadingFileUpload(false);
+      return;
+    }
+
+    const { error } = await supabase.from("opme_inventory").upsert(opmesToInsert, { onConflict: 'codigo_barras, user_id', ignoreDuplicates: false });
     if (error) {
       toast.error(`Falha no upload: ${error.message}`);
     } else {
@@ -132,8 +148,8 @@ const OpmeRegistration = () => {
   };
 
   const handleAddOpme = async () => {
-    if (!userId || !newOpme.opme || !newOpme.codigo_barras) {
-      toast.error("Nome do OPME e Código de Barras são obrigatórios.");
+    if (!userId || !newOpme.opme) {
+      toast.error("Nome do OPME é obrigatório.");
       return;
     }
     setLoadingAddManual(true);
@@ -146,6 +162,42 @@ const OpmeRegistration = () => {
       fetchOpmeInventory();
     }
     setLoadingAddManual(false);
+  };
+
+  const handleEditOpme = (opme: OpmeItem) => {
+    setEditingOpme(opme);
+    setIsEditOpmeDialogOpen(true);
+  };
+
+  const handleUpdateOpme = async () => {
+    if (!editingOpme || !editingOpme.opme) {
+      toast.error("O nome do OPME não pode ficar em branco.");
+      return;
+    }
+    setLoadingUpdate(true);
+    const { error } = await supabase
+      .from("opme_inventory")
+      .update({
+        opme: editingOpme.opme,
+        lote: editingOpme.lote,
+        validade: editingOpme.validade,
+        referencia: editingOpme.referencia,
+        anvisa: editingOpme.anvisa,
+        tuss: editingOpme.tuss,
+        cod_simpro: editingOpme.cod_simpro,
+        codigo_barras: editingOpme.codigo_barras,
+      })
+      .eq("id", editingOpme.id);
+
+    if (error) {
+      toast.error(`Falha ao atualizar OPME: ${error.message}`);
+    } else {
+      toast.success("OPME atualizado com sucesso.");
+      setIsEditOpmeDialogOpen(false);
+      setEditingOpme(null);
+      fetchOpmeInventory();
+    }
+    setLoadingUpdate(false);
   };
 
   const handleAddRule = async () => {
@@ -205,7 +257,7 @@ const OpmeRegistration = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center text-center">
               <h3 className="font-semibold text-lg mb-2">Importar Inventário (Excel/CSV)</h3>
-              <p className="text-sm text-muted-foreground mb-4">O arquivo (CSV ou Excel) deve conter as colunas: opme, lote, validade, referencia, anvisa, tuss, cod_simpro, codigo_barras.</p>
+              <p className="text-sm text-muted-foreground mb-4">O arquivo deve conter a coluna "opme". Outras colunas como "codigo_barras" são opcionais na importação.</p>
               <div className="flex gap-2">
                 <Button asChild variant="outline">
                   <Label htmlFor="file-upload" className="cursor-pointer">
@@ -241,14 +293,20 @@ const OpmeRegistration = () => {
             {loadingInventory ? <div className="flex items-center justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : 
             <ScrollArea className="h-[300px] w-full rounded-md border">
               <Table>
-                <TableHeader><TableRow><TableHead>OPME</TableHead><TableHead>Lote</TableHead><TableHead>Validade</TableHead><TableHead>Cód. Barras</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>OPME</TableHead><TableHead>Cód. Barras</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {opmeInventory.map(item => (
-                    <TableRow key={item.id}>
+                    <TableRow key={item.id} className={cn(!item.codigo_barras && "bg-yellow-100/50 dark:bg-yellow-900/20")}>
                       <TableCell className="font-medium">{item.opme}</TableCell>
-                      <TableCell>{item.lote}</TableCell>
-                      <TableCell>{item.validade}</TableCell>
-                      <TableCell>{item.codigo_barras}</TableCell>
+                      <TableCell className="flex items-center gap-2">
+                        {!item.codigo_barras && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
+                        {item.codigo_barras || <span className="text-muted-foreground italic">Pendente</span>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditOpme(item)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -257,6 +315,28 @@ const OpmeRegistration = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit OPME Dialog */}
+      <Dialog open={isEditOpmeDialogOpen} onOpenChange={setIsEditOpmeDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar OPME</DialogTitle></DialogHeader>
+          {editingOpme && (
+            <div className="grid gap-4 py-4">
+              {Object.keys(editingOpme).filter(k => k !== 'id').map(key => (
+                <div key={key}>
+                  <Label htmlFor={`edit-${key}`}>{key.replace('_', ' ')}</Label>
+                  <Input id={`edit-${key}`} value={editingOpme[key as keyof typeof editingOpme] || ''} onChange={e => setEditingOpme(prev => prev ? { ...prev, [key]: e.target.value } : null)} />
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={handleUpdateOpme} disabled={loadingUpdate}>
+              {loadingUpdate && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="shadow-lg">
         <CardHeader>
@@ -268,12 +348,12 @@ const OpmeRegistration = () => {
             <h3 className="font-semibold text-lg">Adicionar Nova Regra</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div className="space-y-2"><Label>Tipo de Regra</Label><Select value={newRule.type} onValueChange={(v) => setNewRule(p => ({ ...p, type: v as any }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(ruleTypes).map(([key, { label }]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-2"><Label>Selecione o OPME</Label><Select value={newRule.opme_barcode} onValueChange={(v) => setNewRule(p => ({ ...p, opme_barcode: v }))}><SelectTrigger><SelectValue placeholder="Escolha um OPME..." /></SelectTrigger><SelectContent><ScrollArea className="h-[200px]">{opmeInventory.map(item => <SelectItem key={item.id} value={item.codigo_barras}>{item.opme}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
+              <div className="space-y-2"><Label>Selecione o OPME</Label><Select value={newRule.opme_barcode} onValueChange={(v) => setNewRule(p => ({ ...p, opme_barcode: v }))}><SelectTrigger><SelectValue placeholder="Escolha um OPME..." /></SelectTrigger><SelectContent><ScrollArea className="h-[200px]">{opmeInventory.filter(item => item.codigo_barras).map(item => <SelectItem key={item.id} value={item.codigo_barras!}>{item.opme}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
               <div className="space-y-2"><Label>Nome do Convênio (Exato)</Label><Input placeholder="Ex: Unimed" value={newRule.convenio_name} onChange={(e) => setNewRule(p => ({ ...p, convenio_name: e.target.value }))} /></div>
               <Button onClick={handleAddRule} disabled={submittingRestriction}>{submittingRestriction ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Adicionar</Button>
             </div>
             {newRule.type === 'BILLING_ALERT' && <div className="space-y-2 pt-2"><Label>Mensagem do Alerta</Label><Textarea placeholder="Ex: Lançar este item aumenta o faturamento." value={newRule.message} onChange={(e) => setNewRule(p => ({ ...p, message: e.target.value }))} /></div>}
-            {newRule.type === 'SUGGEST_REPLACEMENT' && <div className="space-y-2 pt-2"><Label>Selecione o OPME Substituto</Label><Select value={newRule.replacement_opme_barcode} onValueChange={(v) => setNewRule(p => ({ ...p, replacement_opme_barcode: v }))}><SelectTrigger><SelectValue placeholder="Escolha o OPME substituto..." /></SelectTrigger><SelectContent><ScrollArea className="h-[200px]">{opmeInventory.map(item => <SelectItem key={item.id} value={item.codigo_barras}>{item.opme}</SelectItem>)}</ScrollArea></SelectContent></Select></div>}
+            {newRule.type === 'SUGGEST_REPLACEMENT' && <div className="space-y-2 pt-2"><Label>Selecione o OPME Substituto</Label><Select value={newRule.replacement_opme_barcode} onValueChange={(v) => setNewRule(p => ({ ...p, replacement_opme_barcode: v }))}><SelectTrigger><SelectValue placeholder="Escolha o OPME substituto..." /></SelectTrigger><SelectContent><ScrollArea className="h-[200px]">{opmeInventory.filter(item => item.codigo_barras).map(item => <SelectItem key={item.id} value={item.codigo_barras!}>{item.opme}</SelectItem>)}</ScrollArea></SelectContent></Select></div>}
           </div>
           <div>
             <h3 className="text-xl font-semibold mb-4">Regras Ativas</h3>
