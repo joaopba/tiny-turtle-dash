@@ -83,7 +83,7 @@ const OpmeRegistration = () => {
       toast.warning(`${data.length - validOpmes.length} linhas foram ignoradas por não terem o nome do OPME.`);
     }
 
-    const opmesToInsert = validOpmes.map((row: any) => ({
+    const allOpmes = validOpmes.map((row: any) => ({
       opme: row.opme,
       lote: row.lote || null,
       validade: row.validade || null,
@@ -95,20 +95,39 @@ const OpmeRegistration = () => {
       user_id: userId,
     }));
 
-    if (opmesToInsert.length === 0) {
+    const opmesToUpsert = allOpmes.filter(opme => opme.codigo_barras);
+    const opmesToInsert = allOpmes.filter(opme => !opme.codigo_barras);
+
+    if (opmesToUpsert.length === 0 && opmesToInsert.length === 0) {
       toast.error("Nenhum OPME válido para importar.");
       setLoadingFileUpload(false);
       return;
     }
 
-    const { error } = await supabase.from("opme_inventory").upsert(opmesToInsert, { onConflict: 'codigo_barras, user_id', ignoreDuplicates: false });
-    if (error) {
-      toast.error(`Falha no upload: ${error.message}`);
-    } else {
-      toast.success(`${opmesToInsert.length} OPMEs importados/atualizados com sucesso!`);
+    try {
+      const promises = [];
+      if (opmesToUpsert.length > 0) {
+        promises.push(supabase.from("opme_inventory").upsert(opmesToUpsert, { onConflict: 'codigo_barras, user_id' }));
+      }
+      if (opmesToInsert.length > 0) {
+        promises.push(supabase.from("opme_inventory").insert(opmesToInsert));
+      }
+
+      const results = await Promise.all(promises);
+      const hasError = results.some(res => res.error);
+
+      if (hasError) {
+        const errorMessages = results.map(res => res.error?.message).filter(Boolean).join('; ');
+        throw new Error(errorMessages);
+      }
+
+      toast.success(`${allOpmes.length} OPMEs importados/atualizados com sucesso!`);
       fetchOpmeInventory();
+    } catch (error: any) {
+      toast.error(`Falha no upload: ${error.message}`);
+    } finally {
+      setLoadingFileUpload(false);
     }
-    setLoadingFileUpload(false);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
