@@ -11,10 +11,9 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { ThemeProvider } from "next-themes";
-import ErrorBoundary from "./ErrorBoundary"; // Importar ErrorBoundary
+import ErrorBoundary from "./ErrorBoundary";
 
 const Layout = () => {
-  console.log("Layout: Componente Layout renderizado.");
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <div className="flex min-h-screen bg-background text-foreground">
@@ -24,30 +23,32 @@ const Layout = () => {
             direction="horizontal"
             className="min-h-screen w-full"
           >
-            <ResizablePanel defaultSize={18} minSize={15} maxSize={25}>
+            <ResizablePanel defaultSize={18} minSize={15} maxSize={25} className="bg-card">
               <Sidebar />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={82}>
-              <main className="flex-1 flex flex-col p-6 lg:p-10">
-                <div className="flex-1 max-w-7xl mx-auto w-full">
-                  <Header />
-                  <ErrorBoundary> {/* ErrorBoundary aqui */}
-                    <Outlet />
-                  </ErrorBoundary>
-                </div>
-                <MadeWithDyad />
-              </main>
+              <div className="flex flex-col h-full">
+                <Header />
+                <main className="flex-1 flex flex-col p-6 lg:p-8 overflow-y-auto">
+                  <div className="flex-1 max-w-full mx-auto w-full">
+                    <ErrorBoundary>
+                      <Outlet />
+                    </ErrorBoundary>
+                  </div>
+                  <MadeWithDyad />
+                </main>
+              </div>
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
 
-        {/* Layout para telas menores (sem ResizablePanel) */}
+        {/* Layout para telas menores */}
         <div className="flex flex-col flex-1 md:hidden">
-          <Header /> {/* Header com MobileNav para telas pequenas */}
+          <Header />
           <main className="flex-1 flex flex-col p-4">
-            <div className="flex-1 max-w-7xl mx-auto w-full">
-              <ErrorBoundary> {/* ErrorBoundary aqui também para mobile */}
+            <div className="flex-1 w-full">
+              <ErrorBoundary>
                 <Outlet />
               </ErrorBoundary>
             </div>
