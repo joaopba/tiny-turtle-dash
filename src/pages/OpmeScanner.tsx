@@ -31,11 +31,10 @@ const OpmeScanner = () => {
   const [initialLoadHandled, setInitialLoadHandled] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!user?.id) return;
-    // Fetch inventory and restrictions in parallel
+    // Fetch inventory and restrictions in parallel - REMOVED user.id filter to make it global
     const [inventoryRes, restrictionsRes] = await Promise.all([
-      supabase.from("opme_inventory").select("*").eq("user_id", user.id),
-      supabase.from("opme_restrictions").select("*").eq("user_id", user.id)
+      supabase.from("opme_inventory").select("*"),
+      supabase.from("opme_restrictions").select("*")
     ]);
     
     if (inventoryRes.error) toast.error("Falha ao carregar inventário OPME.");
@@ -43,7 +42,7 @@ const OpmeScanner = () => {
 
     if (restrictionsRes.error) toast.error("Falha ao carregar restrições de convênio.");
     else setRestrictions(restrictionsRes.data as OpmeRestriction[]);
-  }, [user?.id]);
+  }, []);
 
   const fetchLinkedOpme = useCallback(async () => {
     if (!user?.id || !selectedCps) return;
