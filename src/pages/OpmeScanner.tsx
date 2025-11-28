@@ -127,7 +127,7 @@ const OpmeScanner = () => {
     }
   }, [userId, selectedCps, opmeInventory]);
 
-  const fetchCpsRecords = useCallback(async (forceApiFetch = false, specificCpsId?: number) => {
+  const fetchCpsRecords = useCallback(async (forceApiFetch = false, specificCpsId?: number, fetchAllLocal = false) => {
     if (!userId) {
       toast.error("ID do usuário não disponível para buscar registros de CPS.");
       return;
@@ -143,7 +143,36 @@ const OpmeScanner = () => {
     try {
       let recordsToProcess: CpsRecord[] = [];
 
-      // 1. Tentar buscar do banco de dados local primeiro
+      if (fetchAllLocal) {
+        const { data: localData, error: localError } = await supabase
+          .from('local_cps_records')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }); // Ordenar para melhor visualização
+
+        if (localError) {
+          console.error("Erro ao buscar TODOS registros de CPS locais:", localError);
+          toast.error("Falha ao carregar todos os registros de CPS locais.");
+          setLoadingCps(false);
+          return;
+        }
+        recordsToProcess = localData.map(record => ({
+          CPS: record.cps_id,
+          PATIENT: record.patient,
+          PROFESSIONAL: record.professional,
+          AGREEMENT: record.agreement,
+          UNIDADENEGOCIO: record.business_unit,
+          CREATED_AT: record.created_at,
+          TIPO: '', SITUACAO: '', ATENDANT: '', TREATMENT: null, REGISTRATION: null, A_CID: '', DATA_ALTA: null, DATAENTREGA: null, DATARAT: null, DATA_FECHADO: '', DATA_RECEBIMENTO: null,
+        }));
+        setCpsRecords(recordsToProcess);
+        toast.success(`Foram encontrados ${recordsToProcess.length} registros de CPS locais.`);
+        setLoadingCps(false);
+        return; // Sai da função após buscar todos os locais
+      }
+
+      // Lógica existente para busca por período ou CPS específico
+      // 1. Tentar buscar do banco de dados local primeiro (com filtros)
       let query = supabase
         .from('local_cps_records')
         .select('*')
@@ -161,7 +190,7 @@ const OpmeScanner = () => {
       const { data: localData, error: localError } = await query;
 
       if (localError) {
-        console.error("Erro ao buscar registros de CPS locais:", localError);
+        console.error("Erro ao buscar registros de CPS locais (com filtros):", localError);
       }
 
       if (localData && localData.length > 0 && !forceApiFetch) {
@@ -178,7 +207,7 @@ const OpmeScanner = () => {
         toast.success(`Foram encontrados ${recordsToProcess.length} registros de CPS locais.`);
       }
 
-      // 2. Se não houver dados locais para o CPS específico ou se for forçado, buscar da API externa
+      // 2. Se não houver dados locais (com filtros) ou se for forçado, buscar da API externa
       if (specificCpsId && (!recordsToProcess.find(r => r.CPS === specificCpsId) || forceApiFetch)) {
         const apiStartDate = formattedStartDate || format(new Date(), "yyyy-MM-dd");
         const apiEndDate = formattedEndDate || format(new Date(), "yyyy-MM-dd");
@@ -276,6 +305,7 @@ const OpmeScanner = () => {
   }, [userId]);
 
   useEffect(() => {
+    // Este useEffect continua buscando com filtros de data/unidade por padrão
     if (startDate && endDate && businessUnit && userId) {
       fetchCpsRecords();
     }
@@ -476,6 +506,9 @@ const OpmeScanner = () => {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <Button onClick={() => fetchCpsRecords(false, undefined, true)} disabled={loadingCps} variant="outline" className="w-full sm:w-auto">
+              {loadingCps ? "Buscando Locais..." : "Ver Todos CPS Locais"}
+            </Button>
             <Button onClick={() => fetchCpsRecords(true)} disabled={loadingCps} variant="secondary" className="w-full sm:w-auto">
               {loadingCps ? "Atualizando da API..." : "Atualizar da API Externa"}
             </Button>
