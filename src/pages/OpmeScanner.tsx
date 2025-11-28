@@ -77,7 +77,8 @@ const OpmeScanner = () => {
   const [linkedOpme, setLinkedOpme] = useState<LinkedOpme[]>([]);
   const [activeTab, setActiveTab] = useState<string>("bipar");
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
-  const [isCpsSelectionModalOpen, setIsCpsSelectionModalOpen] = useState(false); // Inicializa como false
+  const [isCpsSelectionModalOpen, setIsCpsSelectionModalOpen] = useState(false);
+  const [initialLoadHandled, setInitialLoadHandled] = useState(false); // Novo estado para gerenciar o carregamento inicial
 
   useEffect(() => {
     if (!userId) {
@@ -130,36 +131,41 @@ const OpmeScanner = () => {
 
   const handleSelectCps = useCallback(async (record: CpsRecord) => {
     console.log("handleSelectCps: Setting selectedCps to", record.CPS);
-    setSelectedCps(record);
-    setActiveTab("bipar");
-    console.log("handleSelectCps: Setting isCpsSelectionModalOpen to false");
-    setIsCpsSelectionModalOpen(false);
-    console.log("handleSelectCps: Setting isScanModalOpen to true");
-    setIsScanModalOpen(true);
-    if (!userId) {
-      toast.error("Você precisa estar logado para selecionar um CPS.");
-      return;
-    }
+    // Primeiro, feche o modal de seleção
+    setIsCpsSelectionModalOpen(false); // Isso deve acionar a desmontagem do CpsSelectionModal
 
-    const { data, error } = await supabase
-      .from('local_cps_records')
-      .upsert({
-        user_id: userId,
-        cps_id: record.CPS,
-        patient: record.PATIENT,
-        professional: record.PROFESSIONAL,
-        agreement: record.AGREEMENT,
-        business_unit: record.UNIDADENEGOCIO,
-        created_at: record.CREATED_AT,
-      }, { onConflict: 'cps_id, user_id' })
-      .select();
+    // Em seguida, após um pequeno atraso, abra o modal de bipagem e defina o CPS selecionado
+    // Isso dá ao React uma chance de concluir a desmontagem do CpsSelectionModal
+    setTimeout(async () => {
+      setSelectedCps(record);
+      setActiveTab("bipar");
+      setIsScanModalOpen(true);
 
-    if (error) {
-      console.error("Erro ao salvar CPS localmente:", error);
-      toast.error("Falha ao salvar detalhes do CPS localmente.");
-    } else {
-      console.log("CPS salvo/atualizado localmente:", data);
-    }
+      if (!userId) {
+        toast.error("Você precisa estar logado para selecionar um CPS.");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('local_cps_records')
+        .upsert({
+          user_id: userId,
+          cps_id: record.CPS,
+          patient: record.PATIENT,
+          professional: record.PROFESSIONAL,
+          agreement: record.AGREEMENT,
+          business_unit: record.UNIDADENEGOCIO,
+          created_at: record.CREATED_AT,
+        }, { onConflict: 'cps_id, user_id' })
+        .select();
+
+      if (error) {
+        console.error("Erro ao salvar CPS localmente:", error);
+        toast.error("Falha ao salvar detalhes do CPS localmente.");
+      } else {
+        console.log("CPS salvo/atualizado localmente:", data);
+      }
+    }, 100); // Pequeno atraso de 100ms
   }, [userId]);
 
   const fetchCpsRecords = useCallback(async (forceApiFetch = false, specificCpsId?: number, fetchAllLocal = false) => {
@@ -417,29 +423,33 @@ const OpmeScanner = () => {
     }
   }, [userId]);
 
-  // Este useEffect controla a abertura inicial do modal de seleção de CPS
   useEffect(() => {
-    console.log("OpmeScanner useEffect for modals. selectedCps:", selectedCps?.CPS, "isScanModalOpen:", isScanModalOpen, "isCpsSelectionModalOpen:", isCpsSelectionModalOpen);
-    const cpsIdFromUrl = searchParams.get('cps_id');
+    if (startDate && endDate && businessUnit && userId) {
+      fetchCpsRecords();
+    }
+  }, [startDate, endDate, businessUnit, userId, fetchCpsRecords]);
 
+  // Este useEffect controla a abertura inicial do modal de seleção de CPS e o processamento do parâmetro da URL
+  useEffect(() => {
+    console.log("OpmeScanner useEffect for modals. selectedCps:", selectedCps?.CPS, "isScanModalOpen:", isScanModalOpen, "isCpsSelectionModalOpen:", isCpsSelectionModalOpen, "initialLoadHandled:", initialLoadHandled);
+    
     if (!userId) {
-      // Se o usuário não estiver logado, garanta que os modais estejam fechados.
       setIsCpsSelectionModalOpen(false);
       setIsScanModalOpen(false);
       return;
     }
 
-    if (cpsIdFromUrl) {
-      // Se houver um CPS na URL, processa-o. handleCpsSearch já lida com a abertura do modal de bipagem.
-      handleCpsSearch(cpsIdFromUrl);
-      setSearchParams({}); // Limpa o parâmetro da URL após o processamento
-    } else if (!selectedCps && !isScanModalOpen && !isCpsSelectionModalOpen) {
-      // Se nenhum CPS estiver selecionado, e nenhum modal estiver aberto, abre o modal de seleção de CPS.
-      // Isso garante que ele abra na carga inicial se não houver CPS na URL.
-      setIsCpsSelectionModalOpen(true);
+    if (!initialLoadHandled) {
+      const cpsIdFromUrl = searchParams.get('cps_id');
+      if (cpsIdFromUrl) {
+        handleCpsSearch(cpsIdFromUrl);
+        setSearchParams({}); // Limpa o parâmetro da URL após o processamento
+      } else {
+        setIsCpsSelectionModalOpen(true); // Abre o modal de seleção se não houver CPS na URL
+      }
+      setInitialLoadHandled(true); // Marca o carregamento inicial como tratado
     }
-    // As transições entre modais (fechar seleção, abrir bipagem) são gerenciadas por handleSelectCps e handleChangeCps.
-  }, [searchParams, userId, selectedCps, isScanModalOpen, isCpsSelectionModalOpen, handleCpsSearch, setSearchParams]);
+  }, [userId, searchParams, handleCpsSearch, setSearchParams, initialLoadHandled]);
 
 
   useEffect(() => {
@@ -602,7 +612,7 @@ const OpmeScanner = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs key={selectedCps.CPS + "-tabs"} value={activeTab} onValueChange={setActiveTab} className="w-full"> {/* Adicionado key aqui */}
+            <Tabs key={selectedCps.CPS + "-tabs"} value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 h-10">
                 <TabsTrigger value="bipar" className="text-base">Bipar OPME</TabsTrigger>
                 <TabsTrigger value="itens-bipados" className="text-base">Itens Bipados</TabsTrigger>
