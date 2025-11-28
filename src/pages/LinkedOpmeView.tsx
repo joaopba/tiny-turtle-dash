@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/components/SessionContextProvider";
 import { toast } from "sonner";
-import { History, Search, Loader2 } from "lucide-react";
+import { History, Search, Loader2, Scan } from "lucide-react"; // Adicionado Scan aqui
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 

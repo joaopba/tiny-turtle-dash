@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import { Button } from "@/components/ui/button"; // Adicionado Button aqui
 
 interface Props {
   children?: ReactNode;
