@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scan, Loader2, XCircle, Users, ShieldAlert, Info } from "lucide-react";
+import { Scan, Loader2, XCircle, Users, ShieldAlert, Info, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface OpmeItem { id: string; opme: string; codigo_barras: string; }
 interface CpsRecord { CPS: number; PATIENT: string; AGREEMENT: string; }
-interface OpmeRestriction { opme_barcode: string; convenio_name: string; rule_type: 'BLOCK' | 'BILLING_ALERT' | 'EXCLUSIVE_ALLOW'; message: string | null; }
+interface OpmeRestriction { opme_barcode: string; convenio_name: string; rule_type: 'BLOCK' | 'BILLING_ALERT' | 'EXCLUSIVE_ALLOW' | 'SUGGEST_REPLACEMENT'; message: string | null; replacement_opme_barcode?: string | null; }
 interface LinkedOpmeSessionItem { opme_barcode: string; quantity: number; opmeDetails?: OpmeItem; }
 
 interface OpmeScanModalProps {
@@ -38,6 +38,31 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
   }, [isOpen]);
 
+  const linkOpme = async (barcodeToLink: string, opmeDetails: OpmeItem) => {
+    if (!selectedCps || !userId) return;
+    try {
+      const { data: existingLink, error: selectError } = await supabase.from('linked_opme').select('id, quantity').eq('user_id', userId).eq('cps_id', selectedCps.CPS).eq('opme_barcode', barcodeToLink).single();
+      if (selectError && selectError.code !== 'PGRST116') throw selectError;
+
+      if (existingLink) {
+        const { error: updateError } = await supabase.from('linked_opme').update({ quantity: existingLink.quantity + 1 }).eq('id', existingLink.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase.from('linked_opme').insert({ user_id: userId, cps_id: selectedCps.CPS, opme_barcode: barcodeToLink, quantity: 1 });
+        if (insertError) throw insertError;
+      }
+      
+      setCurrentSessionScans(prev => {
+        const existing = prev.find(s => s.opme_barcode === barcodeToLink);
+        if (existing) return prev.map(s => s.opme_barcode === barcodeToLink ? { ...s, quantity: s.quantity + 1 } : s);
+        return [...prev, { opme_barcode: barcodeToLink, quantity: 1, opmeDetails }];
+      });
+      onScanSuccess();
+    } catch (error: any) {
+      toast.error(`Erro ao bipar OPME: ${error.message}`);
+    }
+  };
+
   const handleBarcodeScan = async () => {
     if (!selectedCps || !barcodeInput || !userId) {
       toast.error("CPS, código de barras e login são necessários.");
@@ -47,7 +72,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
 
     const opmeDetails = opmeInventory.find(item => item.codigo_barras === barcodeInput);
     if (!opmeDetails) {
-      toast.error("Código de barras não encontrado no seu inventário OPME.");
+      toast.error("Código de barras não encontrado no seu inventário OPME.", { duration: 5000 });
       setLoadingScan(false);
       setBarcodeInput("");
       inputRef.current?.focus();
@@ -59,48 +84,50 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     // 1. VERIFICAÇÃO DE REGRAS
     const blockRule = restrictions.find(r => r.rule_type === 'BLOCK' && r.opme_barcode === barcodeInput && r.convenio_name.toLowerCase() === patientConvenio);
     if (blockRule) {
-      toast.error("OPME Bloqueado", { description: `Este item não é permitido para o convênio "${selectedCps.AGREEMENT}".`, icon: <ShieldAlert className="h-5 w-5 text-destructive" /> });
-      setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus(); return;
+      toast.error("OPME Bloqueado", { description: `Este item não é permitido para o convênio "${selectedCps.AGREEMENT}".`, icon: <ShieldAlert className="h-5 w-5 text-destructive" />, duration: 5000 });
+      setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
+      return; // CORREÇÃO CRÍTICA: Impede a execução de continuar.
     }
 
     const exclusiveRulesForConvenio = restrictions.filter(r => r.rule_type === 'EXCLUSIVE_ALLOW' && r.convenio_name.toLowerCase() === patientConvenio);
     if (exclusiveRulesForConvenio.length > 0) {
       const isAllowed = exclusiveRulesForConvenio.some(r => r.opme_barcode === barcodeInput);
       if (!isAllowed) {
-        toast.error("Permissão Negada", { description: `Apenas OPMEs específicos são permitidos para o convênio "${selectedCps.AGREEMENT}".`, icon: <ShieldAlert className="h-5 w-5 text-destructive" /> });
-        setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus(); return;
+        toast.error("Permissão Negada", { description: `Apenas OPMEs específicos são permitidos para o convênio "${selectedCps.AGREEMENT}".`, icon: <ShieldAlert className="h-5 w-5 text-destructive" />, duration: 5000 });
+        setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
+        return;
+      }
+    }
+
+    const suggestionRule = restrictions.find(r => r.rule_type === 'SUGGEST_REPLACEMENT' && r.opme_barcode === barcodeInput && r.convenio_name.toLowerCase() === patientConvenio);
+    if (suggestionRule && suggestionRule.replacement_opme_barcode) {
+      const replacementOpmeDetails = opmeInventory.find(item => item.codigo_barras === suggestionRule.replacement_opme_barcode);
+      if (replacementOpmeDetails) {
+        toast.info("Substituição Sugerida", {
+          description: `Para este convênio, sugere-se usar "${replacementOpmeDetails.opme}" no lugar de "${opmeDetails.opme}".`,
+          icon: <Shuffle className="h-5 w-5 text-yellow-500" />,
+          duration: 10000,
+          action: {
+            label: "Substituir",
+            onClick: () => {
+              toast.success(`"${replacementOpmeDetails.opme}" bipado com sucesso!`);
+              linkOpme(replacementOpmeDetails.codigo_barras, replacementOpmeDetails);
+            },
+          },
+        });
+        setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
+        return;
       }
     }
 
     const alertRule = restrictions.find(r => r.rule_type === 'BILLING_ALERT' && r.opme_barcode === barcodeInput && r.convenio_name.toLowerCase() === patientConvenio);
     if (alertRule && alertRule.message) {
-      toast.info("Alerta de Faturamento", { description: alertRule.message, icon: <Info className="h-5 w-5 text-blue-500" /> });
+      toast.info("Alerta de Faturamento", { description: alertRule.message, icon: <Info className="h-5 w-5 text-blue-500" />, duration: 5000 });
     }
 
-    // 2. LÓGICA DE BIPAGEM
-    try {
-      const { data: existingLink, error: selectError } = await supabase.from('linked_opme').select('id, quantity').eq('user_id', userId).eq('cps_id', selectedCps.CPS).eq('opme_barcode', barcodeInput).single();
-      if (selectError && selectError.code !== 'PGRST116') throw selectError;
-
-      if (existingLink) {
-        const { error: updateError } = await supabase.from('linked_opme').update({ quantity: existingLink.quantity + 1 }).eq('id', existingLink.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase.from('linked_opme').insert({ user_id: userId, cps_id: selectedCps.CPS, opme_barcode: barcodeInput, quantity: 1 });
-        if (insertError) throw insertError;
-      }
-      
-      setCurrentSessionScans(prev => {
-        const existing = prev.find(s => s.opme_barcode === barcodeInput);
-        if (existing) return prev.map(s => s.opme_barcode === barcodeInput ? { ...s, quantity: s.quantity + 1 } : s);
-        return [...prev, { opme_barcode: barcodeInput, quantity: 1, opmeDetails }];
-      });
-      onScanSuccess();
-    } catch (error: any) {
-      toast.error(`Erro ao bipar OPME: ${error.message}`);
-    } finally {
-      setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
-    }
+    // 2. LÓGICA DE BIPAGEM (se nenhuma regra interrompeu)
+    await linkOpme(barcodeInput, opmeDetails);
+    setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
   };
 
   return (

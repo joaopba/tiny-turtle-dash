@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download } from "lucide-react";
+import { Upload, Package, PlusCircle, Loader2, ShieldX, Trash2, Info, CheckCircle, Download, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,13 +21,14 @@ interface OpmeItem {
 }
 
 interface OpmeRestriction {
-  id: string; opme_barcode: string; convenio_name: string; rule_type: 'BLOCK' | 'BILLING_ALERT' | 'EXCLUSIVE_ALLOW'; message: string | null;
+  id: string; opme_barcode: string; convenio_name: string; rule_type: 'BLOCK' | 'BILLING_ALERT' | 'EXCLUSIVE_ALLOW' | 'SUGGEST_REPLACEMENT'; message: string | null; replacement_opme_barcode?: string | null;
 }
 
 const ruleTypes = {
   BLOCK: { label: "Bloqueio (Não Permitido)", icon: ShieldX },
   BILLING_ALERT: { label: "Alerta de Faturamento", icon: Info },
   EXCLUSIVE_ALLOW: { label: "Permissão Exclusiva", icon: CheckCircle },
+  SUGGEST_REPLACEMENT: { label: "Sugerir Substituição", icon: Shuffle },
 };
 
 const OpmeRegistration = () => {
@@ -44,7 +45,7 @@ const OpmeRegistration = () => {
   const [submittingRestriction, setSubmittingRestriction] = useState(false);
 
   const [newOpme, setNewOpme] = useState<Omit<OpmeItem, 'id'>>({ opme: "", lote: "", validade: "", referencia: "", anvisa: "", tuss: "", cod_simpro: "", codigo_barras: "" });
-  const [newRule, setNewRule] = useState<{ opme_barcode: string; convenio_name: string; type: keyof typeof ruleTypes; message: string }>({ opme_barcode: "", convenio_name: "", type: "BLOCK", message: "" });
+  const [newRule, setNewRule] = useState<{ opme_barcode: string; convenio_name: string; type: keyof typeof ruleTypes; message: string; replacement_opme_barcode: string }>({ opme_barcode: "", convenio_name: "", type: "BLOCK", message: "", replacement_opme_barcode: "" });
 
   const fetchOpmeInventory = useCallback(async () => {
     if (!userId) { setLoadingInventory(false); return; }
@@ -118,6 +119,10 @@ const OpmeRegistration = () => {
       toast.error("A mensagem é obrigatória para Alertas de Faturamento.");
       return;
     }
+    if (newRule.type === 'SUGGEST_REPLACEMENT' && !newRule.replacement_opme_barcode) {
+      toast.error("É obrigatório selecionar um OPME substituto.");
+      return;
+    }
     setSubmittingRestriction(true);
     const { error } = await supabase.from("opme_restrictions").insert({
       user_id: userId,
@@ -125,13 +130,14 @@ const OpmeRegistration = () => {
       convenio_name: newRule.convenio_name.trim(),
       rule_type: newRule.type,
       message: newRule.type === 'BILLING_ALERT' ? newRule.message : null,
+      replacement_opme_barcode: newRule.type === 'SUGGEST_REPLACEMENT' ? newRule.replacement_opme_barcode : null,
     });
     if (error) {
       if (error.code === '23505') toast.error("Esta regra já existe.");
       else toast.error(`Falha ao adicionar regra: ${error.message}`);
     } else {
       toast.success("Regra adicionada com sucesso.");
-      setNewRule({ opme_barcode: "", convenio_name: "", type: "BLOCK", message: "" });
+      setNewRule({ opme_barcode: "", convenio_name: "", type: "BLOCK", message: "", replacement_opme_barcode: "" });
       fetchRestrictions();
     }
     setSubmittingRestriction(false);
@@ -229,10 +235,11 @@ const OpmeRegistration = () => {
               <Button onClick={handleAddRule} disabled={submittingRestriction}>{submittingRestriction ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Adicionar</Button>
             </div>
             {newRule.type === 'BILLING_ALERT' && <div className="space-y-2 pt-2"><Label>Mensagem do Alerta</Label><Textarea placeholder="Ex: Lançar este item aumenta o faturamento." value={newRule.message} onChange={(e) => setNewRule(p => ({ ...p, message: e.target.value }))} /></div>}
+            {newRule.type === 'SUGGEST_REPLACEMENT' && <div className="space-y-2 pt-2"><Label>Selecione o OPME Substituto</Label><Select value={newRule.replacement_opme_barcode} onValueChange={(v) => setNewRule(p => ({ ...p, replacement_opme_barcode: v }))}><SelectTrigger><SelectValue placeholder="Escolha o OPME substituto..." /></SelectTrigger><SelectContent><ScrollArea className="h-[200px]">{opmeInventory.map(item => <SelectItem key={item.id} value={item.codigo_barras}>{item.opme}</SelectItem>)}</ScrollArea></SelectContent></Select></div>}
           </div>
           <div>
             <h3 className="text-xl font-semibold mb-4">Regras Ativas</h3>
-            {loadingRestrictions ? <div className="flex items-center justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : restrictions.length > 0 ? <ScrollArea className="h-[250px] w-full rounded-md border"><Table><TableHeader><TableRow><TableHead>OPME</TableHead><TableHead>Convênio</TableHead><TableHead>Tipo de Regra</TableHead><TableHead>Mensagem</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{restrictions.map(rule => <TableRow key={rule.id}><TableCell className="font-medium">{getOpmeNameByBarcode(rule.opme_barcode)}</TableCell><TableCell>{rule.convenio_name}</TableCell><TableCell><div className="flex items-center gap-2">{React.createElement(ruleTypes[rule.rule_type].icon, { className: "h-4 w-4" })} {ruleTypes[rule.rule_type].label}</div></TableCell><TableCell className="text-sm text-muted-foreground">{rule.message || "N/A"}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleDeleteRestriction(rule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>)}</TableBody></Table></ScrollArea> : <p className="text-muted-foreground text-center py-4">Nenhuma regra foi criada ainda.</p>}
+            {loadingRestrictions ? <div className="flex items-center justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : restrictions.length > 0 ? <ScrollArea className="h-[250px] w-full rounded-md border"><Table><TableHeader><TableRow><TableHead>OPME</TableHead><TableHead>Convênio</TableHead><TableHead>Tipo de Regra</TableHead><TableHead>Detalhe</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{restrictions.map(rule => <TableRow key={rule.id}><TableCell className="font-medium">{getOpmeNameByBarcode(rule.opme_barcode)}</TableCell><TableCell>{rule.convenio_name}</TableCell><TableCell><div className="flex items-center gap-2">{React.createElement(ruleTypes[rule.rule_type].icon, { className: "h-4 w-4" })} {ruleTypes[rule.rule_type].label}</div></TableCell><TableCell className="text-sm text-muted-foreground">{rule.message || (rule.replacement_opme_barcode ? `Substituir por: ${getOpmeNameByBarcode(rule.replacement_opme_barcode)}` : "N/A")}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleDeleteRestriction(rule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>)}</TableBody></Table></ScrollArea> : <p className="text-muted-foreground text-center py-4">Nenhuma regra foi criada ainda.</p>}
           </div>
         </CardContent>
       </Card>
