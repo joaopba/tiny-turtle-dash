@@ -60,11 +60,10 @@ const LinkedOpmeView = () => {
   }, [userId]);
 
   const fetchOpmeInventory = useCallback(async () => {
-    if (!userId) return [];
+    // REMOVIDO FILTRO DE USUÁRIO PARA BUSCAR INVENTÁRIO GLOBAL
     const { data, error } = await supabase
       .from("opme_inventory")
-      .select("*")
-      .eq("user_id", userId);
+      .select("*");
 
     if (error) {
       console.error("Erro ao buscar inventário OPME:", error);
@@ -72,7 +71,7 @@ const LinkedOpmeView = () => {
       return [];
     }
     return data as OpmeItem[];
-  }, [userId]);
+  }, []);
 
   const fetchLinkedData = useCallback(async () => {
     if (!userId) {
