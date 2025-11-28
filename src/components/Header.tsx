@@ -17,6 +17,8 @@ const getPageTitle = (pathname: string) => {
       return { title: 'Cadastro de OPME', icon: Package };
     case '/linked-opme-view':
       return { title: 'Visualizar Bipagens', icon: History };
+    case '/account':
+        return { title: 'Minha Conta', icon: UserIcon };
     default:
       return { title: 'Página', icon: LayoutDashboard };
   }
