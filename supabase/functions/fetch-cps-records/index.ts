@@ -12,30 +12,37 @@ serve(async (req) => {
   }
 
   try {
-    const { start_date, end_date, business_unit } = await req.json();
+    const { start_date, end_date } = await req.json();
 
-    if (!start_date || !end_date || !business_unit) {
-      return new Response(JSON.stringify({ error: 'Missing required parameters: start_date, end_date, business_unit' }), {
+    if (!start_date || !end_date) {
+      return new Response(JSON.stringify({ error: 'Missing required parameters: start_date, end_date' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const apiUrl = `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=INT&type_group=CPS&business_unit=${business_unit}`;
+    const businessUnits = ["43", "47", "48"];
 
-    const response = await fetch(apiUrl);
+    const fetchPromises = businessUnits.map(unit => {
+      const apiUrl = `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=INT&type_group=CPS&business_unit=${unit}`;
+      return fetch(apiUrl);
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return new Response(JSON.stringify({ error: `External API error: ${response.status} - ${errorText}` }), {
-        status: response.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const responses = await Promise.all(fetchPromises);
+
+    for (const response of responses) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`External API error for unit ${response.url.split('=').pop()}: ${response.status} - ${errorText}`);
+      }
     }
 
-    const data = await response.json();
+    const jsonDataPromises = responses.map(response => response.json());
+    const results = await Promise.all(jsonDataPromises);
 
-    return new Response(JSON.stringify(data), {
+    const combinedData = results.flat();
+
+    return new Response(JSON.stringify(combinedData), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
