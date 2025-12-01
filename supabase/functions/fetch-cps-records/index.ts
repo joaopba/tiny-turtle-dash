@@ -21,28 +21,36 @@ serve(async (req) => {
       });
     }
 
+    // Busca nos centros de custo (CPS)
     const businessUnits = ["43", "47", "48"];
-
     const fetchPromises = businessUnits.map(unit => {
       const apiUrl = `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=INT&type_group=CPS&business_unit=${unit}`;
       return fetch(apiUrl);
     });
+
+    // Adiciona a busca no grupo ENDOSCOPIA
+    const endoscopiaApiUrl = `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=ALL&type_group=ENDOSCOPIA`;
+    fetchPromises.push(fetch(endoscopiaApiUrl));
 
     const responses = await Promise.all(fetchPromises);
 
     for (const response of responses) {
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`External API error for unit ${response.url.split('=').pop()}: ${response.status} - ${errorText}`);
+        const url = response.url;
+        const identifier = url.includes('ENDOSCOPIA') ? 'ENDOSCOPIA' : `unit ${url.split('=').pop()}`;
+        throw new Error(`External API error for ${identifier}: ${response.status} - ${errorText}`);
       }
     }
 
     const jsonDataPromises = responses.map(response => response.json());
     const results = await Promise.all(jsonDataPromises);
 
+    // Combina e remove duplicados
     const combinedData = results.flat();
+    const uniqueData = Array.from(new Map(combinedData.map(item => [item.CPS, item])).values());
 
-    return new Response(JSON.stringify(combinedData), {
+    return new Response(JSON.stringify(uniqueData), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
