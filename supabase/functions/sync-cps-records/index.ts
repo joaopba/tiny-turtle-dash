@@ -26,7 +26,7 @@ serve(async (req) => {
     }
     console.log(`Período de busca recebido: ${start_date} a ${end_date}`);
 
-    const businessUnits = ["43", "47", "48"];
+    const businessUnits = ["47", "48"];
     const allUrls = businessUnits.map(unit => 
       `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=ALL&type_group=ENDOSCOPIA&business_unit=${unit}`
     );
