@@ -12,6 +12,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log("Iniciando a função fetch-single-cps...");
+
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -20,10 +22,11 @@ serve(async (req) => {
 
     const { cps_id } = await req.json();
     if (!cps_id) {
+      console.error("Erro: cps_id é obrigatório.");
       return new Response(JSON.stringify({ error: 'cps_id is required' }), { status: 400, headers: corsHeaders });
     }
+    console.log(`Buscando CPS ID: ${cps_id}`);
 
-    // Busca em um período amplo para aumentar a chance de encontrar o CPS
     const endDate = new Date();
     const startDate = subDays(endDate, 365);
     const formattedStartDate = format(startDate, "yyyy-MM-dd");
@@ -34,16 +37,20 @@ serve(async (req) => {
       fetch(`https://api-lab.my-world.dev.br/cps/list-cps?start_date=${formattedStartDate}&end_date=${formattedEndDate}&type_cps=ALL&type_group=ENDOSCOPIA&business_unit=${unit}&cps_id=${cps_id}`)
     );
 
-    const responses = await Promise.all(fetchPromises);
+    console.log("Enviando requisições para a API externa...");
+    const settledResponses = await Promise.allSettled(fetchPromises);
     let foundRecord = null;
 
-    for (const res of responses) {
-      if (res.ok) {
-        const data = await res.json();
+    for (const result of settledResponses) {
+      if (result.status === 'fulfilled' && result.value.ok) {
+        const data = await result.value.json();
         if (Array.isArray(data) && data.length > 0) {
+          console.log(`Registro encontrado na API para CPS ${cps_id}`);
           foundRecord = data[0];
           break; 
         }
+      } else if (result.status === 'rejected') {
+        console.error("Erro em uma das requisições fetch:", result.reason);
       }
     }
 
@@ -57,25 +64,31 @@ serve(async (req) => {
         created_at: foundRecord.CREATED_AT,
       };
 
+      console.log(`Fazendo upsert do registro para CPS ${cps_id} no Supabase...`);
       const { error: upsertError } = await supabaseAdmin
         .from('local_cps_records')
         .upsert(recordToUpsert, { onConflict: 'cps_id' });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        console.error("Erro durante o upsert no Supabase:", upsertError);
+        throw upsertError;
+      }
 
+      console.log("Upsert concluído com sucesso.");
       return new Response(JSON.stringify({ data: recordToUpsert }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    console.log(`Nenhum registro encontrado para CPS ${cps_id} na API externa.`);
     return new Response(JSON.stringify({ data: null }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error("Erro na função fetch-single-cps:", error);
+    console.error("Erro crítico na função fetch-single-cps:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
