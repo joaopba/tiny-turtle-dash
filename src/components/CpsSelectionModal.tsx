@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, AlertCircle } from "lucide-react";
+import { Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "./SessionContextProvider";
@@ -25,6 +25,7 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
   const [cpsInput, setCpsInput] = useState<string>("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<CpsRecord[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = useCallback(async (cpsToSearch: string) => {
@@ -43,7 +44,6 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
     }
 
     try {
-      // A busca agora é feita apenas na tabela local, que é sincronizada
       const { data, error } = await supabase
         .from('local_cps_records')
         .select('*')
@@ -73,6 +73,41 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
     }
   }, [user?.id]);
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    const syncToast = toast.loading("Sincronizando registros dos últimos 3 dias...");
+
+    try {
+      const endDate = new Date();
+      const startDate = subDays(endDate, 3);
+
+      const { error } = await supabase.functions.invoke('sync-cps-records', {
+        body: {
+          start_date: format(startDate, 'yyyy-MM-dd'),
+          end_date: format(endDate, 'yyyy-MM-dd'),
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success("Sincronização concluída! Tente buscar o paciente novamente.", {
+        id: syncToast,
+      });
+
+      if (cpsInput) {
+        handleSearch(cpsInput);
+      }
+
+    } catch (error: any) {
+      console.error("Erro na sincronização manual:", error);
+      toast.error(`Falha na sincronização: ${error.message}`, {
+        id: syncToast,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       const cpsIdFromUrl = searchParams.get('cps_id');
@@ -90,11 +125,14 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Buscar e Selecionar Paciente (CPS)</DialogTitle>
-          <DialogDescription>Digite o número do CPS para buscar nos registros sincronizados.</DialogDescription>
+          <DialogDescription>Digite o número do CPS para buscar ou sincronize os registros mais recentes.</DialogDescription>
         </DialogHeader>
         <div className="flex items-center space-x-2 pt-4">
-          <Input ref={inputRef} placeholder="Digite o número do CPS..." value={cpsInput} onChange={(e) => setCpsInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSearch(cpsInput)} disabled={isSearching} />
-          <Button onClick={() => handleSearch(cpsInput)} disabled={isSearching}>{isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}</Button>
+          <Input ref={inputRef} placeholder="Digite o número do CPS..." value={cpsInput} onChange={(e) => setCpsInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSearch(cpsInput)} disabled={isSearching || isSyncing} />
+          <Button onClick={() => handleSearch(cpsInput)} disabled={isSearching || isSyncing}>{isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}</Button>
+          <Button variant="outline" onClick={handleSync} disabled={isSearching || isSyncing} title="Sincronizar Registros Recentes">
+            {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
         </div>
         <div className="mt-4 min-h-[200px]">
           {isSearching ? (
@@ -114,7 +152,7 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
               <AlertCircle className="h-8 w-8 mb-2" />
               <p>Nenhum resultado encontrado.</p>
-              <p className="text-xs">Verifique se o número do CPS está correto e se o paciente foi registrado no sistema principal.</p>
+              <p className="text-xs">Verifique o número ou clique no botão de sincronização <RefreshCw className="inline h-3 w-3" /> para buscar os registros mais recentes.</p>
             </div>
           )}
         </div>
