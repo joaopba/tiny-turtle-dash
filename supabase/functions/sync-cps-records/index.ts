@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log("Iniciando a função sync-cps-records...");
+  console.log("Iniciando a função sync-cps-records (versão otimizada)...");
 
   try {
     const supabaseAdmin = createClient(
@@ -27,13 +27,11 @@ serve(async (req) => {
     console.log(`Período de busca recebido: ${start_date} a ${end_date}`);
 
     const businessUnits = ["43", "47", "48"];
-    const cpsUrls = businessUnits.map(unit => 
-      `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=INT&type_group=CPS&business_unit=${unit}`
+    const allUrls = businessUnits.map(unit => 
+      `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=ALL&type_group=ENDOSCOPIA&business_unit=${unit}`
     );
-    const endoscopiaUrl = `https://api-lab.my-world.dev.br/cps/list-cps?start_date=${start_date}&end_date=${end_date}&type_cps=ALL&type_group=ENDOSCOPIA`;
-    const allUrls = [...cpsUrls, endoscopiaUrl];
     
-    console.log(`Buscando dados de ${allUrls.length} URLs...`);
+    console.log(`Buscando dados de ${allUrls.length} URLs otimizadas...`);
 
     const fetchPromises = allUrls.map(url => fetch(url));
     const settledResponses = await Promise.allSettled(fetchPromises);
