@@ -7,6 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to prevent timezone issues with date-only strings
+const formatCreatedAt = (createdAt: string | null | undefined): string | null => {
+  if (!createdAt) return null;
+  // Check if it's a date-only string (e.g., YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) {
+    return `${createdAt}T12:00:00`; // Append midday time to avoid timezone shift to previous day
+  }
+  return createdAt;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -61,7 +71,7 @@ serve(async (req) => {
         professional: foundRecord.PROFESSIONAL,
         agreement: foundRecord.AGREEMENT,
         business_unit: foundRecord.UNIDADENEGOCIO,
-        created_at: foundRecord.CREATED_AT,
+        created_at: formatCreatedAt(foundRecord.CREATED_AT),
       };
 
       console.log(`Fazendo upsert do registro para CPS ${cps_id} no Supabase...`);

@@ -6,6 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to prevent timezone issues with date-only strings
+const formatCreatedAt = (createdAt: string | null | undefined): string | null => {
+  if (!createdAt) return null;
+  // Check if it's a date-only string (e.g., YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) {
+    return `${createdAt}T12:00:00`; // Append midday time to avoid timezone shift to previous day
+  }
+  return createdAt;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -73,7 +83,7 @@ serve(async (req) => {
       professional: record.PROFESSIONAL,
       agreement: record.AGREEMENT,
       business_unit: record.UNIDADENEGOCIO,
-      created_at: record.CREATED_AT,
+      created_at: formatCreatedAt(record.CREATED_AT),
     }));
 
     console.log(`Iniciando upsert de ${recordsToUpsert.length} registros...`);
