@@ -44,16 +44,17 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
     }
 
     try {
-      const { data, error } = await supabase
+      // Etapa 1: Buscar nos registros locais
+      const { data: localData, error: localError } = await supabase
         .from('local_cps_records')
         .select('*')
         .eq('cps_id', parsedCpsId);
 
-      if (error) throw error;
+      if (localError) throw localError;
 
-      if (data && data.length > 0) {
-        toast.success(`${data.length} paciente(s) encontrado(s)!`);
-        const records: CpsRecord[] = data.map(d => ({
+      if (localData && localData.length > 0) {
+        toast.success(`${localData.length} paciente(s) encontrado(s) localmente!`);
+        const records: CpsRecord[] = localData.map(d => ({
           CPS: d.cps_id,
           PATIENT: d.patient,
           PROFESSIONAL: d.professional,
@@ -63,7 +64,30 @@ const CpsSelectionModal: React.FC<CpsSelectionModalProps> = ({ isOpen, onClose, 
         }));
         setSearchResults(records);
       } else {
-        toast.warning("Paciente não encontrado nos registros sincronizados.");
+        // Etapa 2: Se não encontrar, buscar na API externa
+        const apiToast = toast.loading("Paciente não encontrado localmente. Buscando na API externa...");
+        const { data: apiData, error: apiError } = await supabase.functions.invoke('fetch-single-cps', {
+          body: { cps_id: parsedCpsId }
+        });
+
+        if (apiError) throw apiError;
+
+        if (apiData && apiData.data) {
+          const record = apiData.data;
+          const formattedRecord: CpsRecord = {
+            CPS: record.cps_id,
+            PATIENT: record.patient,
+            PROFESSIONAL: record.professional,
+            AGREEMENT: record.agreement,
+            UNIDADENEGOCIO: record.business_unit,
+            CREATED_AT: record.created_at,
+          };
+          setSearchResults([formattedRecord]);
+          toast.success("Paciente encontrado na API e sincronizado!", { id: apiToast });
+        } else {
+          toast.warning("Paciente não encontrado nos registros locais nem na API externa.", { id: apiToast });
+          setSearchResults([]);
+        }
       }
     } catch (error: any) {
       console.error("Erro na busca de CPS:", error);
