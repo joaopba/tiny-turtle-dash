@@ -70,11 +70,19 @@ const Reports = () => {
 
     setLoading(true);
     setReportData([]);
+
+    // CORREÇÃO: Ajustar as datas para cobrir o dia inteiro
+    const startDate = new Date(date.from);
+    startDate.setHours(0, 0, 0, 0);
+
+    const endDate = new Date(date.to);
+    endDate.setHours(23, 59, 59, 999);
+
     try {
       const { data, error } = await supabase.rpc('get_opme_report_data', {
         user_uuid: user.id,
-        start_date_param: date.from.toISOString(),
-        end_date_param: date.to.toISOString(),
+        start_date_param: startDate.toISOString(),
+        end_date_param: endDate.toISOString(),
       });
 
       if (error) throw error;
