@@ -45,6 +45,13 @@ interface AlertInfo {
   replacementOpme?: OpmeItem;
 }
 
+// Função auxiliar para remover zeros à esquerda
+const normalizeBarcode = (code: string): string => {
+  if (!code) return '';
+  // Remove zeros à esquerda, mas mantém '0' se for o único caractere
+  return code.replace(/^0+/, '') || '0';
+};
+
 const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
   isOpen, onClose, selectedCps, opmeInventory, restrictions, onScanSuccess, onChangeCps, linkedOpme
 }) => {
@@ -66,15 +73,20 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
 
   const linkOpme = async (barcodeToLink: string) => {
     if (!selectedCps || !user) return;
+    
+    // Garante que o código de barras inserido no banco de dados não tenha zeros à esquerda,
+    // se o código original não tinha.
+    const normalizedBarcodeToLink = normalizeBarcode(barcodeToLink);
+
     try {
-      const { data: existingLink, error: selectError } = await supabase.from('linked_opme').select('id, quantity').eq('user_id', user.id).eq('cps_id', selectedCps.CPS).eq('opme_barcode', barcodeToLink).single();
+      const { data: existingLink, error: selectError } = await supabase.from('linked_opme').select('id, quantity').eq('user_id', user.id).eq('cps_id', selectedCps.CPS).eq('opme_barcode', normalizedBarcodeToLink).single();
       if (selectError && selectError.code !== 'PGRST116') throw selectError;
 
       if (existingLink) {
         const { error: updateError } = await supabase.from('linked_opme').update({ quantity: existingLink.quantity + 1 }).eq('id', existingLink.id);
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase.from('linked_opme').insert({ user_id: user.id, cps_id: selectedCps.CPS, opme_barcode: barcodeToLink, quantity: 1 });
+        const { error: insertError } = await supabase.from('linked_opme').insert({ user_id: user.id, cps_id: selectedCps.CPS, opme_barcode: normalizedBarcodeToLink, quantity: 1 });
         if (insertError) throw insertError;
       }
       onScanSuccess();
@@ -100,16 +112,27 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
     setLoadingScan(true);
 
-    const opmeDetails = opmeInventory.find(item => item.codigo_barras === codeToScan);
+    // 1. Normaliza o código bipado (remove zeros à esquerda)
+    const normalizedScannedCode = normalizeBarcode(codeToScan);
+
+    // 2. Busca no inventário, comparando o código bipado normalizado com os códigos de barras normalizados do inventário
+    const opmeDetails = opmeInventory.find(item => 
+      item.codigo_barras && normalizeBarcode(item.codigo_barras) === normalizedScannedCode
+    );
+
     if (!opmeDetails) {
       toast.error("Código de barras não encontrado no seu inventário OPME.", { duration: 5000 });
       setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
       return;
     }
+    
+    // O código de barras a ser usado para regras e linkagem é o código normalizado do inventário
+    const opmeBarcodeToUse = opmeDetails.codigo_barras;
 
     const patientConvenio = selectedCps.AGREEMENT?.trim().toLowerCase() || '';
     
-    const blockRule = restrictions.find(r => r.rule_type === 'BLOCK' && r.opme_barcode === codeToScan && r.convenio_name.toLowerCase() === patientConvenio);
+    // 3. Aplica as regras de restrição usando o código de barras do inventário
+    const blockRule = restrictions.find(r => r.rule_type === 'BLOCK' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
     if (blockRule) {
       setAlertInfo({ type: 'BLOCK', title: "OPME Bloqueado", description: `Este item não é permitido para o convênio "${selectedCps.AGREEMENT}". A bipagem foi cancelada.`, icon: <ShieldAlert className="h-10 w-10 text-destructive" /> });
       setLoadingScan(false); setBarcodeInput("");
@@ -118,7 +141,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
 
     const exclusiveRulesForConvenio = restrictions.filter(r => r.rule_type === 'EXCLUSIVE_ALLOW' && r.convenio_name.toLowerCase() === patientConvenio);
     if (exclusiveRulesForConvenio.length > 0) {
-      const isAllowed = exclusiveRulesForConvenio.some(r => r.opme_barcode === codeToScan);
+      const isAllowed = exclusiveRulesForConvenio.some(r => r.opme_barcode === opmeBarcodeToUse);
       if (!isAllowed) {
         setAlertInfo({ type: 'EXCLUSIVE_ALLOW', title: "Permissão Negada", description: `Apenas OPMEs específicos são permitidos para o convênio "${selectedCps.AGREEMENT}". Este item não está na lista de permissões.`, icon: <ShieldAlert className="h-10 w-10 text-destructive" /> });
         setLoadingScan(false); setBarcodeInput("");
@@ -126,7 +149,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
       }
     }
 
-    const suggestionRule = restrictions.find(r => r.rule_type === 'SUGGEST_REPLACEMENT' && r.opme_barcode === codeToScan && r.convenio_name.toLowerCase() === patientConvenio);
+    const suggestionRule = restrictions.find(r => r.rule_type === 'SUGGEST_REPLACEMENT' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
     if (suggestionRule && suggestionRule.replacement_opme_barcode) {
       const replacementOpmeDetails = opmeInventory.find(item => item.codigo_barras === suggestionRule.replacement_opme_barcode);
       if (replacementOpmeDetails) {
@@ -136,12 +159,13 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
       }
     }
 
-    const alertRule = restrictions.find(r => r.rule_type === 'BILLING_ALERT' && r.opme_barcode === codeToScan && r.convenio_name.toLowerCase() === patientConvenio);
+    const alertRule = restrictions.find(r => r.rule_type === 'BILLING_ALERT' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
     if (alertRule && alertRule.message) {
       toast.info("Alerta de Faturamento", { description: alertRule.message, icon: <Info className="h-5 w-5 text-blue-500" />, duration: 5000 });
     }
 
-    await linkOpme(codeToScan);
+    // 4. Linka o OPME usando o código de barras do inventário
+    await linkOpme(opmeBarcodeToUse);
     setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
   };
 
