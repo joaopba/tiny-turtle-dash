@@ -83,11 +83,49 @@ const OpmeRegistration = () => {
     }
   }, [userId, fetchOpmeInventory, fetchRestrictions]);
 
+  // Helper function to normalize keys from imported files
+  const normalizeDataKeys = (data: any[]) => {
+    const normalizeHeader = (header: string) => 
+      header.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+    return data.map(row => {
+      const newRow: any = {};
+      const rowKeys = Object.keys(row);
+
+      for (const inputKey of rowKeys) {
+        const normalizedInputKey = normalizeHeader(inputKey);
+        const value = row[inputKey];
+
+        if (normalizedInputKey.includes('opme') || normalizedInputKey.includes('nome')) {
+          newRow.opme = value;
+        } else if (normalizedInputKey.includes('lote')) {
+          newRow.lote = value;
+        } else if (normalizedInputKey.includes('validade')) {
+          newRow.validade = value;
+        } else if (normalizedInputKey.includes('referencia')) {
+          newRow.referencia = value;
+        } else if (normalizedInputKey.includes('anvisa')) {
+          newRow.anvisa = value;
+        } else if (normalizedInputKey.includes('tuss')) {
+          newRow.tuss = value;
+        } else if (normalizedInputKey.includes('codsimpro') || normalizedInputKey.includes('simpro')) {
+          newRow.cod_simpro = value;
+        } else if (normalizedInputKey.includes('codigobarras') || normalizedInputKey.includes('barcode')) {
+          newRow.codigo_barras = value;
+        }
+      }
+      return newRow;
+    });
+  };
+
   const processAndUploadData = async (data: any[]) => {
     if (!userId) return;
-    const validOpmes = data.filter(row => row.opme);
-    if (validOpmes.length !== data.length) {
-      toast.warning(`${data.length - validOpmes.length} linhas foram ignoradas por não terem o nome do OPME.`);
+    
+    const normalizedData = normalizeDataKeys(data);
+
+    const validOpmes = normalizedData.filter(row => row.opme);
+    if (validOpmes.length !== normalizedData.length) {
+      toast.warning(`${normalizedData.length - validOpmes.length} linhas foram ignoradas por não terem o nome do OPME.`);
     }
 
     const allOpmes = validOpmes.map((row: any) => ({
