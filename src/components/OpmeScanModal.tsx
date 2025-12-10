@@ -111,26 +111,30 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
 
       if (selectError && selectError.code !== "PGRST116") throw selectError;
 
+      let newQuantity;
       if (existingLink) {
+        newQuantity = existingLink.quantity + 1;
         const { error: updateError } = await supabase
           .from("linked_opme")
-          .update({ quantity: existingLink.quantity + 1 })
+          .update({ quantity: newQuantity })
           .eq("id", existingLink.id);
 
         if (updateError) throw updateError;
-        return existingLink.quantity + 1; // Retorna a nova quantidade
       } else {
+        newQuantity = 1;
         const { error: insertError } = await supabase.from("linked_opme").insert({
           user_id: user.id,
           cps_id: selectedCps.CPS,
           opme_barcode: normalizedBarcodeToLink,
-          quantity: 1,
+          quantity: newQuantity,
         });
         if (insertError) throw insertError;
-        return 1; // Retorna a nova quantidade
       }
 
+      // CHAMA A FUNÇÃO DE SUCESSO AQUI PARA ATUALIZAR A LISTA
       onScanSuccess();
+      
+      return newQuantity; // Retorna a nova quantidade
     } catch (error: any) {
       toast.error(`Erro ao bipar OPME: ${error.message}`);
       throw error;
