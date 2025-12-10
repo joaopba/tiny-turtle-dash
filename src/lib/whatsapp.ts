@@ -11,11 +11,13 @@ export interface WhatsappOpmeNotificationData {
 }
 
 export async function sendWhatsappNotification(data: WhatsappOpmeNotificationData) {
+  console.log("Iniciando invocação da Edge Function 'send-whatsapp-alert'...");
   const { error } = await supabase.functions.invoke('send-whatsapp-alert', {
     body: data,
   });
 
   if (error) {
+    console.error("Erro na invocação da Edge Function:", error);
     throw new Error(
       `Falha ao invocar Edge Function para WhatsApp: ${error.message}`,
     );
