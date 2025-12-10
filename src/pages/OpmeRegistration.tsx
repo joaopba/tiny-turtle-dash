@@ -140,8 +140,25 @@ const OpmeRegistration = () => {
       user_id: userId,
     }));
 
-    const opmesToUpsert = allOpmes.filter(opme => opme.codigo_barras);
+    const opmesWithBarcode = allOpmes.filter(opme => opme.codigo_barras);
     const opmesToInsert = allOpmes.filter(opme => !opme.codigo_barras);
+
+    // Deduplication logic to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    const uniqueBarcodes = new Set<string>();
+    const opmesToUpsert: any[] = [];
+    
+    for (const opme of opmesWithBarcode) {
+        if (opme.codigo_barras && !uniqueBarcodes.has(opme.codigo_barras)) {
+            uniqueBarcodes.add(opme.codigo_barras);
+            opmesToUpsert.push(opme);
+        }
+    }
+
+    const duplicatesRemoved = opmesWithBarcode.length - opmesToUpsert.length;
+    if (duplicatesRemoved > 0) {
+        toast.warning(`${duplicatesRemoved} OPMEs com códigos de barras duplicados no arquivo foram ignorados.`);
+    }
+    // End Deduplication logic
 
     if (opmesToUpsert.length === 0 && opmesToInsert.length === 0) {
       toast.error("Nenhum OPME válido para importar.");
