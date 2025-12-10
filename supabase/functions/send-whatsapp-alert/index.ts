@@ -25,8 +25,19 @@ serve(async (req) => {
       });
     }
 
-    const cleanedBarcode = opmeBarcode ?? "não informado";
-    const body = `OPME bipado: ${opmeName} (Cód. Barras: ${cleanedBarcode}). Paciente: ${patientName} (CPS ${cpsId}). Convênio: ${convenioName ?? "N/A"}. Quantidade: ${quantity ?? 1}. Horário: ${timestamp}.`;
+    const cleanedBarcode = opmeBarcode ?? "N/A";
+    const cleanedConvenio = convenioName ?? "N/A";
+    const cleanedQuantity = quantity ?? 1;
+
+    const body = `🚨 *ALERTA DE BIPAGEM DE OPME* 🚨\n\n` +
+                 `*Paciente:* ${patientName}\n` +
+                 `*CPS:* ${cpsId}\n` +
+                 `*Convênio:* ${cleanedConvenio}\n\n` +
+                 `*OPME Bipado:*\n` +
+                 `  - Nome: ${opmeName}\n` +
+                 `  - Cód. Barras: ${cleanedBarcode}\n` +
+                 `  - Quantidade: ${cleanedQuantity}x\n\n` +
+                 `_Horário: ${timestamp}_`;
 
     console.log(`Enviando mensagem para ${TARGET_NUMBER}: ${body}`);
 
