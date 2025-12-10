@@ -133,7 +133,7 @@ const Reports = () => {
     autoTable(doc, {
       head: [['Data', 'CPS', 'Paciente', 'OPME', 'Cód. Barras', 'Lote', 'Validade', 'Qtd']],
       body: reportData.map(item => [
-        item.linked_at,
+        item.linked_at, // Já formatado pela função SQL
         item.cps_id,
         item.patient_name,
         item.opme_name,

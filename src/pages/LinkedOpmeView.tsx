@@ -184,7 +184,7 @@ const LinkedOpmeView = () => {
                                 <TableRow key={item.id}>
                                   <TableCell className="font-medium">{item.opmeDetails?.opme || "N/A"}</TableCell>
                                   <TableCell>{item.opme_barcode}</TableCell>
-                                  <TableCell>{new Date(item.linked_at).toLocaleString()}</TableCell>
+                                  <TableCell>{new Date(item.linked_at).toLocaleString('pt-BR')}</TableCell>
                                   <TableCell className="text-right">
                                     {canDelete && (
                                       <AlertDialog>

@@ -232,6 +232,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
                           </AlertDialog>
                         )}
                       </div>
+                      <span className="text-xs text-muted-foreground">{new Date(item.linked_at).toLocaleTimeString('pt-BR')}</span>
                     </div>
                   );
                 }) : <p className="text-sm text-muted-foreground text-center pt-4">Nenhum item bipado ainda.</p>}
