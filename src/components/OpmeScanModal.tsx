@@ -25,6 +25,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSession } from "./SessionContextProvider";
+import { sendWhatsappNotification } from "@/lib/whatsapp";
 
 interface OpmeItem { id: string; opme: string; codigo_barras: string; }
 interface CpsRecord { CPS: number; PATIENT: string; AGREEMENT: string; }
@@ -45,11 +46,10 @@ interface AlertInfo {
   replacementOpme?: OpmeItem;
 }
 
-// Função auxiliar para remover zeros à esquerda
+// Normaliza códigos removendo zeros à esquerda
 const normalizeBarcode = (code: string): string => {
-  if (!code) return '';
-  // Remove zeros à esquerda, mas mantém '0' se for o único caractere
-  return code.replace(/^0+/, '') || '0';
+  if (!code) return "";
+  return code.replace(/^0+/, "") || "0";
 };
 
 const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
@@ -71,32 +71,68 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
   }, [isOpen]);
 
+  const notifyWhatsapp = (opmeName: string, opmeBarcode: string | null | undefined) => {
+    if (!selectedCps) return;
+    const timestamp = new Date().toLocaleString("pt-BR");
+    
+    // Log para depuração
+    console.log("Tentando enviar notificação WhatsApp:", { opmeName, opmeBarcode, patientName: selectedCps.PATIENT, cpsId: selectedCps.CPS });
+
+    void sendWhatsappNotification({
+      opmeName,
+      opmeBarcode,
+      patientName: selectedCps.PATIENT,
+      cpsId: selectedCps.CPS,
+      convenioName: selectedCps.AGREEMENT,
+      timestamp,
+    }).catch((error) => {
+      console.error("Falha ao enviar notificação via WhatsApp:", error);
+      toast.error("Não foi possível enviar o alerta via WhatsApp. Verifique o console para detalhes.");
+    });
+  };
+
   const linkOpme = async (barcodeToLink: string) => {
     if (!selectedCps || !user) return;
-    
-    // Garante que o código de barras inserido no banco de dados não tenha zeros à esquerda,
-    // se o código original não tinha.
+
     const normalizedBarcodeToLink = normalizeBarcode(barcodeToLink);
 
     try {
-      const { data: existingLink, error: selectError } = await supabase.from('linked_opme').select('id, quantity').eq('user_id', user.id).eq('cps_id', selectedCps.CPS).eq('opme_barcode', normalizedBarcodeToLink).single();
-      if (selectError && selectError.code !== 'PGRST116') throw selectError;
+      const { data: existingLink, error: selectError } = await supabase
+        .from("linked_opme")
+        .select("id, quantity")
+        .eq("user_id", user.id)
+        .eq("cps_id", selectedCps.CPS)
+        .eq("opme_barcode", normalizedBarcodeToLink)
+        .single();
+
+      if (selectError && selectError.code !== "PGRST116") throw selectError;
 
       if (existingLink) {
-        const { error: updateError } = await supabase.from('linked_opme').update({ quantity: existingLink.quantity + 1 }).eq('id', existingLink.id);
+        const { error: updateError } = await supabase
+          .from("linked_opme")
+          .update({ quantity: existingLink.quantity + 1 })
+          .eq("id", existingLink.id);
+
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase.from('linked_opme').insert({ user_id: user.id, cps_id: selectedCps.CPS, opme_barcode: normalizedBarcodeToLink, quantity: 1 });
+        const { error: insertError } = await supabase.from("linked_opme").insert({
+          user_id: user.id,
+          cps_id: selectedCps.CPS,
+          opme_barcode: normalizedBarcodeToLink,
+          quantity: 1,
+        });
         if (insertError) throw insertError;
       }
+
       onScanSuccess();
     } catch (error: any) {
       toast.error(`Erro ao bipar OPME: ${error.message}`);
+      throw error;
     }
   };
 
   const handleDeleteLinkedOpme = async (linkedOpmeId: string) => {
-    const { error } = await supabase.from('linked_opme').delete().eq('id', linkedOpmeId);
+    const { error } = await supabase.from("linked_opme").delete().eq("id", linkedOpmeId);
     if (error) {
       toast.error(`Falha ao excluir bipagem: ${error.message}`);
     } else {
@@ -112,61 +148,106 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
     setLoadingScan(true);
 
-    // 1. Normaliza o código bipado (remove zeros à esquerda)
     const normalizedScannedCode = normalizeBarcode(codeToScan);
 
-    // 2. Busca no inventário, comparando o código bipado normalizado com os códigos de barras normalizados do inventário
-    const opmeDetails = opmeInventory.find(item => 
-      item.codigo_barras && normalizeBarcode(item.codigo_barras) === normalizedScannedCode
+    const opmeDetails = opmeInventory.find((item) =>
+      item.codigo_barras && normalizeBarcode(item.codigo_barras) === normalizedScannedCode,
     );
 
     if (!opmeDetails) {
       toast.error("Código de barras não encontrado no seu inventário OPME.", { duration: 5000 });
-      setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
+      setLoadingScan(false);
+      setBarcodeInput("");
+      inputRef.current?.focus();
       return;
     }
-    
-    // O código de barras a ser usado para regras e linkagem é o código normalizado do inventário
+
     const opmeBarcodeToUse = opmeDetails.codigo_barras;
+    const patientConvenio = selectedCps.AGREEMENT?.trim().toLowerCase() || "";
 
-    const patientConvenio = selectedCps.AGREEMENT?.trim().toLowerCase() || '';
-    
-    // 3. Aplica as regras de restrição usando o código de barras do inventário
-    const blockRule = restrictions.find(r => r.rule_type === 'BLOCK' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
+    const blockRule = restrictions.find(
+      (r) =>
+        r.rule_type === "BLOCK" &&
+        r.opme_barcode === opmeBarcodeToUse &&
+        r.convenio_name.toLowerCase() === patientConvenio,
+    );
     if (blockRule) {
-      setAlertInfo({ type: 'BLOCK', title: "OPME Bloqueado", description: `Este item não é permitido para o convênio "${selectedCps.AGREEMENT}". A bipagem foi cancelada.`, icon: <ShieldAlert className="h-10 w-10 text-destructive" /> });
-      setLoadingScan(false); setBarcodeInput("");
+      setAlertInfo({
+        type: "BLOCK",
+        title: "OPME Bloqueado",
+        description: `Este item não é permitido para o convênio "${selectedCps.AGREEMENT}". A bipagem foi cancelada.`,
+        icon: <ShieldAlert className="h-10 w-10 text-destructive" />,
+      });
+      setLoadingScan(false);
+      setBarcodeInput("");
       return;
     }
 
-    const exclusiveRulesForConvenio = restrictions.filter(r => r.rule_type === 'EXCLUSIVE_ALLOW' && r.convenio_name.toLowerCase() === patientConvenio);
+    const exclusiveRulesForConvenio = restrictions.filter(
+      (r) => r.rule_type === "EXCLUSIVE_ALLOW" && r.convenio_name.toLowerCase() === patientConvenio,
+    );
     if (exclusiveRulesForConvenio.length > 0) {
-      const isAllowed = exclusiveRulesForConvenio.some(r => r.opme_barcode === opmeBarcodeToUse);
+      const isAllowed = exclusiveRulesForConvenio.some((r) => r.opme_barcode === opmeBarcodeToUse);
       if (!isAllowed) {
-        setAlertInfo({ type: 'EXCLUSIVE_ALLOW', title: "Permissão Negada", description: `Apenas OPMEs específicos são permitidos para o convênio "${selectedCps.AGREEMENT}". Este item não está na lista de permissões.`, icon: <ShieldAlert className="h-10 w-10 text-destructive" /> });
-        setLoadingScan(false); setBarcodeInput("");
+        setAlertInfo({
+          type: "EXCLUSIVE_ALLOW",
+          title: "Permissão Negada",
+          description: `Apenas OPMEs específicos são permitidos para o convênio "${selectedCps.AGREEMENT}". Este item não está na lista de permissões.`,
+          icon: <ShieldAlert className="h-10 w-10 text-destructive" />,
+        });
+        setLoadingScan(false);
+        setBarcodeInput("");
         return;
       }
     }
 
-    const suggestionRule = restrictions.find(r => r.rule_type === 'SUGGEST_REPLACEMENT' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
+    const suggestionRule = restrictions.find(
+      (r) =>
+        r.rule_type === "SUGGEST_REPLACEMENT" &&
+        r.opme_barcode === opmeBarcodeToUse &&
+        r.convenio_name.toLowerCase() === patientConvenio,
+    );
     if (suggestionRule && suggestionRule.replacement_opme_barcode) {
-      const replacementOpmeDetails = opmeInventory.find(item => item.codigo_barras === suggestionRule.replacement_opme_barcode);
+      const replacementOpmeDetails = opmeInventory.find(
+        (item) => item.codigo_barras === suggestionRule.replacement_opme_barcode,
+      );
       if (replacementOpmeDetails) {
-        setAlertInfo({ type: 'SUGGEST_REPLACEMENT', title: "Substituição Sugerida", description: `Para este convênio, sugere-se usar "${replacementOpmeDetails.opme}" no lugar de "${opmeDetails.opme}". O que você gostaria de fazer?`, icon: <Shuffle className="h-10 w-10 text-blue-500" />, originalOpme: opmeDetails, replacementOpme: replacementOpmeDetails });
-        setLoadingScan(false); setBarcodeInput("");
+        setAlertInfo({
+          type: "SUGGEST_REPLACEMENT",
+          title: "Substituição Sugerida",
+          description: `Para este convênio, sugere-se usar "${replacementOpmeDetails.opme}" no lugar de "${opmeDetails.opme}". O que você gostaria de fazer?`,
+          icon: <Shuffle className="h-10 w-10 text-blue-500" />,
+          originalOpme: opmeDetails,
+          replacementOpme: replacementOpmeDetails,
+        });
+        setLoadingScan(false);
+        setBarcodeInput("");
         return;
       }
     }
 
-    const alertRule = restrictions.find(r => r.rule_type === 'BILLING_ALERT' && r.opme_barcode === opmeBarcodeToUse && r.convenio_name.toLowerCase() === patientConvenio);
+    const alertRule = restrictions.find(
+      (r) =>
+        r.rule_type === "BILLING_ALERT" &&
+        r.opme_barcode === opmeBarcodeToUse &&
+        r.convenio_name.toLowerCase() === patientConvenio,
+    );
     if (alertRule && alertRule.message) {
-      toast.info("Alerta de Faturamento", { description: alertRule.message, icon: <Info className="h-5 w-5 text-blue-500" />, duration: 5000 });
+      toast.info("Alerta de Faturamento", {
+        description: alertRule.message,
+        icon: <Info className="h-5 w-5 text-blue-500" />,
+        duration: 5000,
+      });
     }
 
-    // 4. Linka o OPME usando o código de barras do inventário
-    await linkOpme(opmeBarcodeToUse);
-    setLoadingScan(false); setBarcodeInput(""); inputRef.current?.focus();
+    try {
+      await linkOpme(opmeBarcodeToUse);
+      notifyWhatsapp(opmeDetails.opme, opmeBarcodeToUse);
+    } finally {
+      setLoadingScan(false);
+      setBarcodeInput("");
+      inputRef.current?.focus();
+    }
   };
 
   const handleCameraScanSuccess = (decodedText: string) => {
@@ -180,16 +261,24 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     inputRef.current?.focus();
   };
 
-  const handleSuggestionChoice = (useSuggestion: boolean) => {
-    if (!alertInfo || !alertInfo.originalOpme || !alertInfo.replacementOpme) return;
-    if (useSuggestion) {
-      toast.success(`"${alertInfo.replacementOpme.opme}" bipado com sucesso!`);
-      linkOpme(alertInfo.replacementOpme.codigo_barras);
-    } else {
-      toast.info(`Continuando com "${alertInfo.originalOpme.opme}".`);
-      linkOpme(alertInfo.originalOpme.codigo_barras);
+  const handleSuggestionChoice = async (useSuggestion: boolean) => {
+    if (!alertInfo) return;
+    const chosenOpme = useSuggestion ? alertInfo.replacementOpme : alertInfo.originalOpme;
+    if (!chosenOpme) return;
+
+    try {
+      await linkOpme(chosenOpme.codigo_barras);
+      if (useSuggestion) {
+        toast.success(`"${chosenOpme.opme}" bipado com sucesso!`);
+      } else {
+        toast.info(`Continuando com "${chosenOpme.opme}".`);
+      }
+      notifyWhatsapp(chosenOpme.opme, chosenOpme.codigo_barras);
+    } catch (error: any) {
+      toast.error(`Erro ao bipar OPME: ${error.message}`);
+    } finally {
+      handleCloseAlert();
     }
-    handleCloseAlert();
   };
 
   return (
@@ -204,19 +293,42 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
               <div className="space-y-2">
                 <Label htmlFor="barcode-input">Bipar Código de Barras</Label>
                 <div className="flex items-center space-x-2">
-                  <Input ref={inputRef} id="barcode-input" placeholder="Aguardando bipagem..." value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleBarcodeScan(barcodeInput)} disabled={loadingScan} />
+                  <Input
+                    ref={inputRef}
+                    id="barcode-input"
+                    placeholder="Aguardando bipagem..."
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleBarcodeScan(barcodeInput)}
+                    disabled={loadingScan}
+                  />
                   {isMobile ? (
                     <Sheet open={isCameraScannerOpen} onOpenChange={setIsCameraScannerOpen}>
-                      <SheetTrigger asChild><Button variant="outline" size="icon"><Camera className="h-4 w-4" /></Button></SheetTrigger>
-                      <SheetContent side="bottom"><SheetHeader><SheetTitle>Aponte para o Código de Barras</SheetTitle></SheetHeader><div className="py-4"><CameraScanner onScanSuccess={handleCameraScanSuccess} onClose={() => setIsCameraScannerOpen(false)} /></div></SheetContent>
+                      <SheetTrigger asChild>
+                        <Button variant="outline" size="icon">
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="bottom">
+                        <SheetHeader>
+                          <SheetTitle>Aponte para o Código de Barras</SheetTitle>
+                        </SheetHeader>
+                        <div className="py-4">
+                          <CameraScanner onScanSuccess={handleCameraScanSuccess} onClose={() => setIsCameraScannerOpen(false)} />
+                        </div>
+                      </SheetContent>
                     </Sheet>
                   ) : (
-                    <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={loadingScan}>{loadingScan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}</Button>
+                    <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={loadingScan}>
+                      {loadingScan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                    </Button>
                   )}
                 </div>
               </div>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-lg">Informações do Paciente</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Informações do Paciente</CardTitle>
+                </CardHeader>
                 <CardContent className="text-sm space-y-1">
                   <p><strong>CPS:</strong> {selectedCps?.CPS}</p>
                   <p><strong>Convênio:</strong> {selectedCps?.AGREEMENT}</p>
@@ -226,7 +338,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
             <div className="space-y-2">
               <Label>OPMEs Bipados para este Paciente</Label>
               <ScrollArea className="h-48 w-full rounded-md border p-2">
-                {linkedOpme.length > 0 ? linkedOpme.map(item => {
+                {linkedOpme.length > 0 ? linkedOpme.map((item) => {
                   const isGestor = profile?.role === 'GESTOR';
                   const isOwner = item.user_id === user?.id;
                   const linkedAtDate = new Date(item.linked_at);
@@ -247,7 +359,10 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
-                              <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza de que deseja excluir esta bipagem?</AlertDialogDescription></AlertDialogHeader>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>Tem certeza de que deseja excluir esta bipagem?</AlertDialogDescription>
+                              </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                 <AlertDialogAction onClick={() => handleDeleteLinkedOpme(item.id)} className="bg-destructive hover:bg-destructive/90">Excluir</AlertDialogAction>
@@ -259,7 +374,9 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
                       <span className="text-xs text-muted-foreground">{new Date(item.linked_at).toLocaleTimeString('pt-BR')}</span>
                     </div>
                   );
-                }) : <p className="text-sm text-muted-foreground text-center pt-4">Nenhum item bipado ainda.</p>}
+                }) : (
+                  <p className="text-sm text-muted-foreground text-center pt-4">Nenhum item bipado ainda.</p>
+                )}
               </ScrollArea>
             </div>
           </div>
@@ -280,7 +397,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {alertInfo?.type === 'SUGGEST_REPLACEMENT' ? (
+            {alertInfo?.type === "SUGGEST_REPLACEMENT" ? (
               <>
                 <AlertDialogCancel onClick={() => handleSuggestionChoice(false)}>Usar Original</AlertDialogCancel>
                 <AlertDialogAction onClick={() => handleSuggestionChoice(true)}>Usar Sugestão</AlertDialogAction>
