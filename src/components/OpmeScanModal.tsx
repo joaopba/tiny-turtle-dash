@@ -75,9 +75,6 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     if (!selectedCps) return;
     const timestamp = new Date().toLocaleString("pt-BR");
     
-    // Log para depuração
-    console.log("Tentando enviar notificação WhatsApp:", { opmeName, opmeBarcode, patientName: selectedCps.PATIENT, cpsId: selectedCps.CPS });
-
     void sendWhatsappNotification({
       opmeName,
       opmeBarcode,
