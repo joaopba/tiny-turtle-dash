@@ -27,7 +27,7 @@ import {
 import { useSession } from "./SessionContextProvider";
 import { sendWhatsappNotification } from "@/lib/whatsapp";
 
-interface OpmeItem { id: string; opme: string; codigo_barras: string; }
+interface OpmeItem { id: string; opme: string; codigo_barras: string; lote: string | null; validade: string | null; referencia: string | null; anvisa: string | null; tuss: string | null; cod_simpro: string | null; }
 interface CpsRecord { CPS: number; PATIENT: string; AGREEMENT: string; }
 interface OpmeRestriction { opme_barcode: string; convenio_name: string; rule_type: 'BLOCK' | 'BILLING_ALERT' | 'EXCLUSIVE_ALLOW' | 'SUGGEST_REPLACEMENT'; message: string | null; replacement_opme_barcode?: string | null; }
 interface LinkedOpme { id: string; user_id: string; opme_barcode: string; linked_at: string; quantity: number; opmeDetails?: OpmeItem; }
@@ -71,17 +71,24 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
   }, [isOpen]);
 
-  const notifyWhatsapp = (opmeName: string, opmeBarcode: string | null | undefined) => {
+  const notifyWhatsapp = (opmeDetails: OpmeItem, quantity: number = 1) => {
     if (!selectedCps) return;
     const timestamp = new Date().toLocaleString("pt-BR");
     
     void sendWhatsappNotification({
-      opmeName,
-      opmeBarcode,
+      opmeName: opmeDetails.opme,
+      opmeBarcode: opmeDetails.codigo_barras,
       patientName: selectedCps.PATIENT,
       cpsId: selectedCps.CPS,
       convenioName: selectedCps.AGREEMENT,
+      quantity: quantity,
       timestamp,
+      lote: opmeDetails.lote,
+      validade: opmeDetails.validade,
+      referencia: opmeDetails.referencia,
+      anvisa: opmeDetails.anvisa,
+      tuss: opmeDetails.tuss,
+      cod_simpro: opmeDetails.cod_simpro,
     }).catch((error) => {
       console.error("Falha ao enviar notificação via WhatsApp:", error);
       toast.error("Não foi possível enviar o alerta via WhatsApp. Verifique o console para detalhes.");
@@ -111,6 +118,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
           .eq("id", existingLink.id);
 
         if (updateError) throw updateError;
+        return existingLink.quantity + 1; // Retorna a nova quantidade
       } else {
         const { error: insertError } = await supabase.from("linked_opme").insert({
           user_id: user.id,
@@ -119,6 +127,7 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
           quantity: 1,
         });
         if (insertError) throw insertError;
+        return 1; // Retorna a nova quantidade
       }
 
       onScanSuccess();
@@ -238,8 +247,8 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     }
 
     try {
-      await linkOpme(opmeBarcodeToUse);
-      notifyWhatsapp(opmeDetails.opme, opmeBarcodeToUse);
+      const newQuantity = await linkOpme(opmeBarcodeToUse);
+      notifyWhatsapp(opmeDetails, newQuantity);
     } finally {
       setLoadingScan(false);
       setBarcodeInput("");
@@ -264,13 +273,13 @@ const OpmeScanModal: React.FC<OpmeScanModalProps> = ({
     if (!chosenOpme) return;
 
     try {
-      await linkOpme(chosenOpme.codigo_barras);
+      const newQuantity = await linkOpme(chosenOpme.codigo_barras);
       if (useSuggestion) {
         toast.success(`"${chosenOpme.opme}" bipado com sucesso!`);
       } else {
         toast.info(`Continuando com "${chosenOpme.opme}".`);
       }
-      notifyWhatsapp(chosenOpme.opme, chosenOpme.codigo_barras);
+      notifyWhatsapp(chosenOpme, newQuantity);
     } catch (error: any) {
       toast.error(`Erro ao bipar OPME: ${error.message}`);
     } finally {

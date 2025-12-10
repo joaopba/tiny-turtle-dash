@@ -16,7 +16,7 @@ serve(async (req) => {
   }
 
   try {
-    const { opmeName, opmeBarcode, patientName, cpsId, convenioName, quantity, timestamp } = await req.json();
+    const { opmeName, opmeBarcode, patientName, cpsId, convenioName, quantity, timestamp, lote, validade, referencia, anvisa, tuss, cod_simpro } = await req.json();
 
     if (!opmeName || !patientName || !cpsId) {
       return new Response(JSON.stringify({ error: 'Dados incompletos para notificação.' }), {
@@ -36,7 +36,13 @@ serve(async (req) => {
                  `*OPME Bipado:*\n` +
                  `  - Nome: ${opmeName}\n` +
                  `  - Cód. Barras: ${cleanedBarcode}\n` +
-                 `  - Quantidade: ${cleanedQuantity}x\n\n` +
+                 `  - Quantidade: ${cleanedQuantity}x\n` +
+                 `  - Lote: ${lote ?? 'N/A'}\n` +
+                 `  - Validade: ${validade ?? 'N/A'}\n` +
+                 `  - Referência: ${referencia ?? 'N/A'}\n` +
+                 `  - ANVISA: ${anvisa ?? 'N/A'}\n` +
+                 `  - TUSS: ${tuss ?? 'N/A'}\n` +
+                 `  - SIMPRO: ${cod_simpro ?? 'N/A'}\n\n` +
                  `_Horário: ${timestamp}_`;
 
     console.log(`Enviando mensagem para ${TARGET_NUMBER}: ${body}`);

@@ -8,6 +8,13 @@ export interface WhatsappOpmeNotificationData {
   convenioName?: string | null;
   quantity?: number;
   timestamp: string;
+  // Novos campos de detalhes do OPME
+  lote?: string | null;
+  validade?: string | null;
+  referencia?: string | null;
+  anvisa?: string | null;
+  tuss?: string | null;
+  cod_simpro?: string | null;
 }
 
 export async function sendWhatsappNotification(data: WhatsappOpmeNotificationData) {
